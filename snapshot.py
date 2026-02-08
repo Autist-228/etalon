@@ -200,13 +200,13 @@ class Snapshot:
         return f"Snapshot(ts={self.snapshot_ts}, kalshi={self.kalshi_count}, poly={self.poly_count})"
 
 
-def create_snapshot(hours_ahead: int = 6) -> Snapshot:
+def create_snapshot(hours_ahead: int = 6, mode: str = 'all') -> Snapshot:
     """
     Создать слепок данных через M1.
     
-    1. KalshiListener загружает спорт на ближайшие 6ч
-    2. PolymarketListener загружает спорт на ближайшие 6ч (gameStartTime)
-    3. Кросс-фильтрация: оставляем только пересечения
+    Args:
+        hours_ahead: окно вперёд в часах
+        mode: 'all' | 'live_only' | 'upcoming_only'
     
     Returns:
         Snapshot с отфильтрованными данными
@@ -214,8 +214,9 @@ def create_snapshot(hours_ahead: int = 6) -> Snapshot:
     from kalshi_listener import KalshiListener
     from polymarket_listener import PolymarketListener
     
+    mode_label = {'all': 'live + upcoming', 'live_only': 'LIVE ONLY', 'upcoming_only': 'UPCOMING ONLY'}
     print(f"\n{'='*60}")
-    print(f"  M1 SNAPSHOT (окно: {hours_ahead} часов)")
+    print(f"  M1 SNAPSHOT (окно: {hours_ahead}ч, режим: {mode_label.get(mode, mode)})")
     print(f"{'='*60}")
     
     kalshi = KalshiListener(hours_ahead=hours_ahead)
@@ -225,6 +226,15 @@ def create_snapshot(hours_ahead: int = 6) -> Snapshot:
     poly = PolymarketListener(hours_ahead=hours_ahead)
     poly_result = poly.run()
     poly_raw = poly_result['events']
+    
+    if mode == 'live_only':
+        kalshi_raw = [e for e in kalshi_raw if e.get('hours_left', 0) < 0]
+        poly_raw = [e for e in poly_raw if e.get('hours_left', 0) < 0]
+        print(f"   MODE live_only: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
+    elif mode == 'upcoming_only':
+        kalshi_raw = [e for e in kalshi_raw if e.get('hours_left', 0) >= 0]
+        poly_raw = [e for e in poly_raw if e.get('hours_left', 0) >= 0]
+        print(f"   MODE upcoming_only: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
     
     print(f"\n   ДО кросс-фильтрации: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
     

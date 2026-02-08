@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from snapshot import create_snapshot
 from module2.outcome_matcher_v2 import OutcomeMatcherV2
 from module3.fork_tracker_v4_scheduler import ForkTrackerV4
+from module3.sub_event_matcher import SubEventMatcher
 from module4.executor_v2 import ExecutorV2
 from module4.config import print_config as print_m4_config, validate_config as validate_m4_config
 
@@ -36,20 +37,23 @@ from module4.config import print_config as print_m4_config, validate_config as v
 class M0Orchestrator:
     """Оркестратор системы"""
     
-    def __init__(self):
+    VALID_MODES = ('all', 'live_only', 'upcoming_only')
+    
+    def __init__(self, mode: str = 'all', hours_ahead: int = 6):
         self.running = True
         self.tracker = None
         self.executor = None
         
-        # Настройки
-        self.M1_INTERVAL = 10 * 60    # M1 раз в 10 минут (окно 6 часов вперёд!)
-        # M2 запускается ТОЛЬКО после M1, не имеет собственного интервала!
+        if mode not in self.VALID_MODES:
+            raise ValueError(f"Invalid mode '{mode}'. Must be one of: {self.VALID_MODES}")
+        self.mode = mode
+        self.hours_ahead = hours_ahead
         
-        # Timestamps
+        self.M1_INTERVAL = 10 * 60
+        
         self.last_m1_run = 0
         self.last_m2_run = 0
         
-        # Обработка Ctrl+C
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
     
@@ -67,7 +71,7 @@ class M0Orchestrator:
         print("="*80)
         
         start_time = time.time()
-        snapshot = create_snapshot(hours_ahead=6)
+        snapshot = create_snapshot(hours_ahead=self.hours_ahead, mode=self.mode)
         elapsed = time.time() - start_time
         
         print(f"\n✅ M1 завершён!")
@@ -150,6 +154,21 @@ class M0Orchestrator:
         print(f"\n✅ M4 готов к исполнению вилок (мин. {validate_m4_config}%)")
         print(f"   Executor будет получать вилки от M3")
     
+    def run_sub_event_matching(self, snapshot, outcome_links):
+        """M3 Sub-Events: Match Totals/Spreads/BTTS independently"""
+        print("\n" + "="*80)
+        print("  M3-SUB: MATCHING TOTALS/SPREADS/BTTS")
+        print("="*80)
+        
+        try:
+            matcher = SubEventMatcher()
+            sub_links = matcher.match_sub_events(snapshot, outcome_links)
+            print(f"\n  Sub-event links: {len(sub_links)}")
+            return sub_links
+        except Exception as e:
+            print(f"\n  Sub-event matching error: {e}")
+            return []
+    
     def update_m3_links(self, new_links):
         """Обновить links в M3"""
         if not self.tracker:
@@ -176,7 +195,9 @@ class M0Orchestrator:
         print(f"⏰ Старт: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
         print()
         print("📋 НАСТРОЙКИ:")
-        print(f"   M1 (snapshot): раз в 10 минут (окно 6 часов вперёд)")
+        print(f"   MODE:          {self.mode}")
+        print(f"   HOURS_AHEAD:   {self.hours_ahead}")
+        print(f"   M1 (snapshot): раз в 10 минут (окно {self.hours_ahead} часов вперёд)")
         print(f"   M2 (matcher):  сразу после M1 на том же snapshot")
         print(f"   M3 (tracker):  постоянно (плюсовые 1 сек, минусовые 5 сек)")
         print(f"   M4 (executor): автоисполнение на вилках >= 10%")
@@ -195,8 +216,11 @@ class M0Orchestrator:
             print("\n❌ НЕТ OUTCOME LINKS! Останавливаюсь...")
             return
         
-        self.start_m3(outcome_links)
-        self.start_m4()  # Инициализируем executor
+        sub_links = self.run_sub_event_matching(snapshot, outcome_links)
+        all_links = outcome_links + sub_links
+        
+        self.start_m3(all_links)
+        self.start_m4()
         
         # ГЛАВНЫЙ ЦИКЛ
         print("\n" + "="*80)
@@ -217,8 +241,10 @@ class M0Orchestrator:
                     # M2: СРАЗУ матчим на ТОМ ЖЕ snapshot (НЕ создаём новый!)
                     outcome_links = self.run_m2(snapshot)
                     
-                    # M3: обновляем links
-                    self.update_m3_links(outcome_links)
+                    sub_links = self.run_sub_event_matching(snapshot, outcome_links)
+                    all_links = outcome_links + sub_links
+                    
+                    self.update_m3_links(all_links)
                 
                 # === M3: ПРОВЕРКА ВИЛОК (планировщик) ===
                 if self.tracker:
@@ -318,7 +344,15 @@ class M0Orchestrator:
 
 def main():
     """Точка входа"""
-    orchestrator = M0Orchestrator()
+    import argparse
+    parser = argparse.ArgumentParser(description='M0 Orchestrator')
+    parser.add_argument('--mode', choices=M0Orchestrator.VALID_MODES, default='all',
+                        help='Event filter mode: all | live_only | upcoming_only')
+    parser.add_argument('--hours', type=int, default=6,
+                        help='Hours ahead window for M1 snapshot (default: 6)')
+    args = parser.parse_args()
+    
+    orchestrator = M0Orchestrator(mode=args.mode, hours_ahead=args.hours)
     orchestrator.run()
 
 

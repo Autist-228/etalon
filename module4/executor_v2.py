@@ -83,9 +83,43 @@ class ExecutorV2:
         print(f"EXECUTOR V2 INITIALIZED")
         print(f"{'='*60}")
         print(f"  MIN_FORK:      {MIN_FORK_PCT}%")
-        print(f"  STAKE LOGIC:   Poly = min + $1, Kalshi подстраивается")
+        print(f"  STAKE LOGIC:   Poly = min + $1, Kalshi \u043f\u043e\u0434\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u0435\u0442\u0441\u044f")
         print(f"  DRY_RUN:       {DRY_RUN}")
-        print(f"{'='*60}\n")
+        if DRY_RUN:
+            print(f"  >>> SAFE MODE: NO TRADES WILL BE EXECUTED <<<")
+        print(f"{'='*60}")
+        
+        self._show_balances()
+        print()
+    
+    def _show_balances(self):
+        """Show Kalshi + Polymarket balances on startup"""
+        print(f"\n  BALANCES:")
+        
+        kalshi_balance = self.kalshi.get_balance()
+        if kalshi_balance is not None:
+            print(f"    Kalshi:      ${kalshi_balance:.2f}")
+        else:
+            print(f"    Kalshi:      N/A (could not fetch)")
+        
+        poly_usdc = self.polymarket.get_usdc_balance()
+        if poly_usdc is not None:
+            print(f"    Polymarket:  ${poly_usdc:.6f} USDC")
+        else:
+            print(f"    Polymarket:  N/A (could not fetch)")
+        
+        if self.polymarket.w3 and self.polymarket.address:
+            try:
+                gas_wei = self.polymarket.w3.eth.get_balance(self.polymarket.address)
+                gas_matic = gas_wei / 1e18
+                print(f"    Gas (MATIC): {gas_matic:.4f}")
+            except Exception as e:
+                print(f"    Gas (MATIC): N/A ({e})")
+        else:
+            print(f"    Gas (MATIC): N/A (no web3)")
+        
+        print(f"    Wallet:      {self.polymarket.address or 'NOT SET'}")
+        print(f"  {'='*56}")
     
     def _load_executed_trades(self):
         """Загрузить список исполненных сделок"""
