@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from module3.prices_fetcher import PricesFetcher
 from module3.fork_calculator import ForkCalculator
 from module3.limits_checker import LimitsChecker
-from module3.config import POSITIVE_FORK_THRESHOLD, Colors
+from module3.config import POSITIVE_FORK_THRESHOLD, TOTAL_FEE, Colors
 
 # === ДИАГНОСТИЧЕСКИЕ ФУНКЦИИ ДЛЯ ЧЕК-ЛИСТА ===
 def _ts():
@@ -325,8 +325,8 @@ class ForkTrackerV4:
             cost1 = k_yes_ask + p_no_ask
             cost2 = k_no_ask + p_yes_ask
         
-        edge1 = 1.0 - cost1
-        edge2 = 1.0 - cost2
+        edge1 = 1.0 - TOTAL_FEE - cost1
+        edge2 = 1.0 - TOTAL_FEE - cost2
         
         edge = max(edge1, edge2)
         fork_pct = edge * 100.0
