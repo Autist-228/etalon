@@ -185,16 +185,18 @@ def extract_strong_tokens(name: str) -> List[str]:
     strong = [t for t in tokens if t not in MASCOTS and t not in WEAK_WORDS and len(t) > 2]
     return strong if strong else tokens  # Fallback to all if no strong
 
+def _get_team_aliases_standalone(name: str) -> List[str]:
+    tokens = set(name.strip().lower().split())
+    aliases = []
+    for city_tokens, nickname_tokens in TEAM_ALIASES:
+        if city_tokens <= tokens:
+            aliases.extend(nickname_tokens)
+        if nickname_tokens & tokens:
+            aliases.extend(city_tokens)
+    return aliases
+
+
 def find_poly_outcome_for_team(kalshi_team: str, poly_outcomes: List[str]) -> Optional[int]:
-    """
-    Find which poly outcome matches kalshi_team
-    Returns index or None
-    
-    Matching by strong tokens:
-    - "Seattle" matches "Seattle Redhawks"
-    - "Pepperdine" matches "Pepperdine Waves"
-    - "Hailey Baptiste" matches "Baptiste" (последний токен = фамилия)
-    """
     k_strong = extract_strong_tokens(kalshi_team)
     
     for i, p_outcome in enumerate(poly_outcomes):
@@ -216,6 +218,21 @@ def find_poly_outcome_for_team(kalshi_team: str, poly_outcomes: List[str]) -> Op
                         other_match = True
                         break
                 if not other_match:
+                    return i
+    
+    k_aliases = _get_team_aliases_standalone(kalshi_team)
+    if k_aliases:
+        for alias in k_aliases:
+            for i, p_outcome in enumerate(poly_outcomes):
+                p_strong = extract_strong_tokens(p_outcome)
+                if any(alias in pt or pt in alias for pt in p_strong):
+                    return i
+    
+    for i, p_outcome in enumerate(poly_outcomes):
+        p_aliases = _get_team_aliases_standalone(p_outcome)
+        if p_aliases:
+            for alias in p_aliases:
+                if any(alias in kt or kt in alias for kt in k_strong):
                     return i
     
     return None
@@ -1068,6 +1085,7 @@ JSON:"""
         """
         team_norm = self._normalize_participant(team_name)
         team_tokens = team_norm.split()
+        team_aliases = self._get_aliases(team_name)
         
         best_idx = None
         best_score = 0
@@ -1086,6 +1104,12 @@ JSON:"""
             for pt_tok in pt_norm.split():
                 if len(pt_tok) >= 3 and pt_tok in team_norm:
                     score += 1
+            
+            if score == 0 and team_aliases:
+                for alias in team_aliases:
+                    if alias in pt_norm:
+                        score += 1
+                        break
             
             if score > best_score:
                 best_score = score
