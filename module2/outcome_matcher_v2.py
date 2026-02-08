@@ -46,10 +46,12 @@ WEAK_WORDS = {
     'jl', 'sbv', 'saski', 'nac',
     'ik', 'if', 'hk', 'bk', 'gf', 'hc',
     'hockey',
-    'de', 'la', 'el', 'en', 'les', 'des', 'du', 'di', 'da', 'do',
+    'de', 'del', 'la', 'el', 'en', 'les', 'des', 'du', 'di', 'da', 'do',
     'belgrade', 'piraeus', 'dordogne', 'vitoria', 'gasteiz',
     'bresse',
     'izmir', 'istanbul', 'ankara',
+    'badalona', 'comodoro', 'estero', 'santiogo', 'santiago',
+    'caprabo', 'forca', 'csp', 'cb',
 }
 
 SPELLING_VARIANTS = {
@@ -122,6 +124,11 @@ SPELLING_VARIANTS = {
     'cologne': ['koln', 'koeln'],
     'koln': ['cologne', 'koeln'],
     'koeln': ['cologne', 'koln'],
+    'soenderjyske': ['sonderjyske'],
+    'sonderjyske': ['soenderjyske'],
+    'nordsjaelland': ['nordsjælland', 'nordsjaeland'],
+    'bilbao': ['athletic', 'athletic bilbao'],
+    'athletic': ['bilbao', 'athletic bilbao'],
 }
 
 ABBREVIATIONS = {
@@ -726,6 +733,8 @@ class OutcomeMatcherV2:
             ct = clean_token(t)
             if ct in WEAK_WORDS:
                 continue
+            if ct.isdigit():
+                continue
             if '-' in t:
                 parts = [p.lower() for p in t.split('-') if len(p) >= 2]
                 if parts and all(p in WEAK_WORDS for p in parts):
@@ -951,6 +960,8 @@ JSON:"""
                 ct = clean_token(t)
                 if ct in WEAK_WORDS:
                     continue
+                if ct.isdigit():
+                    continue
                 if '-' in t:
                     parts = [p.lower() for p in t.split('-') if len(p) >= 2]
                     if parts and all(p in WEAK_WORDS for p in parts):
@@ -960,8 +971,12 @@ JSON:"""
             if not strong_tokens:
                 strong_tokens = tokens
             
-            for token in strong_tokens:
-                if not token_matches_in_text(token, p_title):
+            found = sum(1 for t in strong_tokens if token_matches_in_text(t, p_title))
+            if len(strong_tokens) <= 1:
+                if found < 1:
+                    return False
+            else:
+                if found < min(2, len(strong_tokens)):
                     return False
         
         return True
