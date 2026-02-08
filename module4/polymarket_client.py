@@ -93,7 +93,7 @@ class PolymarketClient:
                 host=self.clob_url,
                 key=self.private_key,
                 chain_id=self.CHAIN_ID,
-                signature_type=2,  # POLY_GNOSIS_SAFE for EOA wallets
+                signature_type=0,  # EOA wallet signature
                 funder=self.address,
             )
             
@@ -388,6 +388,29 @@ class PolymarketClient:
             print(f"❌ Polymarket cancel all error: {e}")
             return False
     
+    def get_market_info(self, token_id: str) -> Optional[Dict]:
+        """Получить информацию о рынке включая min_order_size"""
+        try:
+            resp = self.session.get(
+                f"{self.clob_url}/markets/{token_id}",
+                timeout=API_TIMEOUT
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    'token_id': token_id,
+                    'condition_id': data.get('condition_id', ''),
+                    'minimum_order_size': float(data.get('minimum_order_size', 5)),
+                    'minimum_tick_size': float(data.get('minimum_tick_size', 0.01)),
+                    'active': data.get('active', False),
+                    'closed': data.get('closed', False),
+                    'accepting_orders': data.get('accepting_orders', False),
+                }
+            return None
+        except Exception as e:
+            print(f"❌ Polymarket market info error: {e}")
+            return None
+
     def get_token_ids_for_market(self, condition_id: str, slug: str) -> Optional[List[str]]:
         """Получить token_ids для рынка"""
         try:

@@ -247,6 +247,55 @@ class KalshiClient:
             print(f"❌ Kalshi cancel order error: {e}")
             return False
     
+    def get_market_info(self, ticker: str) -> Optional[Dict]:
+        """Получить информацию о рынке включая лимиты ордеров"""
+        try:
+            path = f"/markets/{ticker}"
+            resp = self.session.get(
+                f"{self.base_url}{path}",
+                timeout=API_TIMEOUT
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                market = data.get('market', {})
+                return {
+                    'ticker': ticker,
+                    'status': market.get('status', ''),
+                    'yes_bid': market.get('yes_bid', 0) / 100,
+                    'yes_ask': market.get('yes_ask', 0) / 100,
+                    'no_bid': market.get('no_bid', 0) / 100,
+                    'no_ask': market.get('no_ask', 0) / 100,
+                    'can_close_early': market.get('can_close_early', False),
+                    'floor_strike': market.get('floor_strike'),
+                    'cap_strike': market.get('cap_strike'),
+                }
+            return None
+        except Exception as e:
+            print(f"❌ Kalshi market info error: {e}")
+            return None
+
+    def get_active_markets(self, event_ticker: str = None, limit: int = 10) -> list:
+        """Получить активные рынки"""
+        try:
+            path = "/markets"
+            params = {'limit': limit, 'status': 'open'}
+            if event_ticker:
+                params['event_ticker'] = event_ticker
+            headers = self._get_headers("GET", path)
+            resp = self.session.get(
+                f"{self.base_url}{path}",
+                headers=headers,
+                params=params,
+                timeout=API_TIMEOUT
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get('markets', [])
+            return []
+        except Exception as e:
+            print(f"❌ Kalshi active markets error: {e}")
+            return []
+
     def calculate_contracts(self, budget_usd: float, price: float) -> int:
         """
         Рассчитать количество контрактов для бюджета.

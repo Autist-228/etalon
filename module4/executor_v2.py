@@ -160,19 +160,20 @@ class ExecutorV2:
         return hashlib.md5(key.encode()).hexdigest()[:16]
     
     def calculate_stakes(self, poly_price: float, kalshi_price: float,
-                        poly_min: float) -> Optional[StakeCalc]:
+                        poly_min: float, min_shares: int = None) -> Optional[StakeCalc]:
         """
         ЛОГИКА РАСЧЁТА (с комиссией и лимитами):
         1. Poly stake = poly_min + $1.00 (но не больше MAX_POLY_STAKE)
         2. Kalshi stake = подстраивается (но не больше MAX_KALSHI_STAKE)
         3. Комиссия 3% вычитается из ожидаемого возврата
-        4. Poly minimum 15 shares (платформенный лимит)
+        4. Poly minimum shares (динамически с API или fallback POLY_MIN_SHARES)
         """
+        effective_min_shares = min_shares if min_shares is not None else POLY_MIN_SHARES
         poly_stake = min(poly_min + 1.00, MAX_POLY_STAKE)
         
         poly_contracts = poly_stake / poly_price
-        if poly_contracts < POLY_MIN_SHARES:
-            print(f"  ⚠️ SKIP: Poly {poly_contracts:.1f} shares < min {POLY_MIN_SHARES} (platform limit)")
+        if poly_contracts < effective_min_shares:
+            print(f"  ⚠️ SKIP: Poly {poly_contracts:.1f} shares < min {effective_min_shares} (platform limit)")
             return None
         
         expected_return_gross = poly_contracts
@@ -364,65 +365,65 @@ class ExecutorV2:
         
         errors = []
         
-        # STEP 1: Размещаем Kalshi ордер
-        kalshi_contracts = int(stakes.kalshi_contracts)
-        print(f"\n  📤 Step 1: Placing Kalshi order...")
-        print(f"     Ticker: {kalshi_ticker}")
-        print(f"     Side: {kalshi_side.upper()}")
-        print(f"     Contracts: {kalshi_contracts}")
-        print(f"     Price: {kalshi_price:.1%}")
-        
-        try:
-            success, k_result = self.kalshi.place_order(
-                ticker=kalshi_ticker,
-                side=kalshi_side,
-                contracts=kalshi_contracts,
-                limit_price=kalshi_price
-            )
-            
-            kalshi_result = k_result
-            
-            if success:
-                kalshi_order_id = k_result.get('order_id')
-                print(f"     ✅ Kalshi order placed: {kalshi_order_id}")
-            else:
-                errors.append(f"Kalshi order failed: {k_result.get('error', 'unknown')}")
-                print(f"     ❌ Kalshi order failed: {k_result.get('error')}")
-        except Exception as e:
-            errors.append(f"Kalshi exception: {str(e)}")
-            print(f"     ❌ Kalshi exception: {e}")
-        
-        # STEP 2: Размещаем Polymarket ордер
+        # STEP 1: Размещаем Polymarket ордер ПЕРВЫМ (проблемная платформа)
         poly_shares = stakes.poly_contracts
-        print(f"\n  📤 Step 2: Placing Polymarket order...")
+        print(f"\n  📤 Step 1: Placing Polymarket order FIRST...")
         print(f"     Token: {poly_token_id[:20]}...")
         print(f"     Side: BUY")
         print(f"     Shares: {poly_shares:.2f} (=${stakes.poly_stake:.2f} USDC)")
         print(f"     Price: {poly_price:.1%}")
         
-        if not kalshi_order_id:
-            print(f"     ⚠️ SKIP Poly: Kalshi order failed, not placing second leg")
-            errors.append("Polymarket skipped: Kalshi order failed")
+        try:
+            success, p_result = self.polymarket.place_order(
+                token_id=poly_token_id,
+                side='BUY',
+                size=poly_shares,
+                price=poly_price
+            )
+            
+            poly_result = p_result
+            
+            if success:
+                poly_order_id = p_result.get('order_id')
+                print(f"     ✅ Polymarket order placed: {poly_order_id}")
+            else:
+                errors.append(f"Polymarket order failed: {p_result.get('error', 'unknown')}")
+                print(f"     ❌ Polymarket order failed: {p_result.get('error')}")
+        except Exception as e:
+            errors.append(f"Polymarket exception: {str(e)}")
+            print(f"     ❌ Polymarket exception: {e}")
+        
+        # STEP 2: Размещаем Kalshi ордер (только если Poly прошёл)
+        kalshi_contracts = int(stakes.kalshi_contracts)
+        print(f"\n  📤 Step 2: Placing Kalshi order...")
+        print(f"     Ticker: {kalshi_ticker}")
+        print(f"     Side: {kalshi_side.upper()}")
+        print(f"     Contracts: {kalshi_contracts}")
+        print(f"     Price: {kalshi_price:.1%}")
+        
+        if not poly_order_id:
+            print(f"     ⚠️ SKIP Kalshi: Polymarket order failed, not placing second leg")
+            errors.append("Kalshi skipped: Polymarket order failed")
         else:
             try:
-                success, p_result = self.polymarket.place_order(
-                    token_id=poly_token_id,
-                    side='BUY',
-                    size=poly_shares,
-                    price=poly_price
+                success, k_result = self.kalshi.place_order(
+                    ticker=kalshi_ticker,
+                    side=kalshi_side,
+                    contracts=kalshi_contracts,
+                    limit_price=kalshi_price
                 )
-            
-                poly_result = p_result
+                
+                kalshi_result = k_result
                 
                 if success:
-                    poly_order_id = p_result.get('order_id')
-                    print(f"     ✅ Polymarket order placed: {poly_order_id}")
+                    kalshi_order_id = k_result.get('order_id')
+                    print(f"     ✅ Kalshi order placed: {kalshi_order_id}")
                 else:
-                    errors.append(f"Polymarket order failed: {p_result.get('error', 'unknown')}")
-                    print(f"     ❌ Polymarket order failed: {p_result.get('error')}")
+                    errors.append(f"Kalshi order failed: {k_result.get('error', 'unknown')}")
+                    print(f"     ❌ Kalshi order failed: {k_result.get('error')}")
             except Exception as e:
-                errors.append(f"Polymarket exception: {str(e)}")
-                print(f"     ❌ Polymarket exception: {e}")
+                errors.append(f"Kalshi exception: {str(e)}")
+                print(f"     ❌ Kalshi exception: {e}")
         
         # STEP 3: Проверка исполнения
         print(f"\n  ⏳ Step 3: Waiting for fills (timeout {ORDER_FILL_TIMEOUT}s)...")
