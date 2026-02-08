@@ -1,0 +1,25 @@
+# BOT 322 - Dependencies
+# Установка: pip install -r requirements.txt
+
+# Core
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Matching & AI
+rapidfuzz>=3.5.0
+anthropic>=0.18.0
+openai>=1.0.0
+
+# Polymarket (Web3 + CLOB)
+web3>=6.15.0
+eth-account>=0.10.0
+py-clob-client>=0.28.0
+
+# Kalshi (Cryptography)
+cryptography>=41.0.0
+anthropic
+cryptography
+openai
+python-dotenv
+rapidfuzz
+requests
