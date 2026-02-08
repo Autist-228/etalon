@@ -197,6 +197,7 @@ class PolymarketListener:
                         markets_detailed.append({
                             'condition_id': market.get('conditionId'),
                             'clob_token_ids': clob_tids,
+                            'question': market.get('question', ''),
                             'outcomes': market_outcomes,
                             'prices': market_prices,
                             'outcome_price_map': outcome_price_map,

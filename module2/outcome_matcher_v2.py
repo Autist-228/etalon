@@ -539,6 +539,23 @@ class OutcomeMatcherV2:
             poly_events=poly_events
         )
         
+        k_sub_event = self._extract_sub_event_number(k_title)
+        if candidates and k_sub_event is not None:
+            sub_type, sub_num = k_sub_event
+            sub_matched = [c for c in candidates
+                           if self._extract_sub_event_number(c.get('event_title', '')) == k_sub_event]
+            if sub_matched:
+                candidates = sub_matched
+            else:
+                self.stats['skipped_no_candidates'] += 1
+                print(f"      ❌ No Poly candidate with matching {sub_type} {sub_num}")
+                return None
+        elif candidates and k_sub_event is None:
+            non_sub = [c for c in candidates
+                       if self._extract_sub_event_number(c.get('event_title', '')) is None]
+            if non_sub:
+                candidates = non_sub
+        
         if not candidates:
             self.stats['skipped_no_candidates'] += 1
             print(f"      ❌ No candidates found")
@@ -1003,6 +1020,22 @@ JSON:"""
         
         return []
 
+    def _extract_sub_event_number(self, title: str):
+        """Extract sub-event indicator (map/game/set number) from title.
+        Returns ('map', 1), ('game', 2), etc. or None for series/main events.
+        """
+        title_lower = title.lower()
+        m = re.search(r'\bmap\s*(\d+)\b', title_lower)
+        if m:
+            return ('map', int(m.group(1)))
+        m = re.search(r'\bgame\s+(\d+)\b', title_lower)
+        if m:
+            return ('game', int(m.group(1)))
+        m = re.search(r'\bset\s+(\d+)\b', title_lower)
+        if m:
+            return ('set', int(m.group(1)))
+        return None
+
     def _find_poly_market_for_team(self, team_name: str, poly_teams: List[str], 
                                      poly_markets: List[Dict]) -> Optional[Dict]:
         """
@@ -1247,6 +1280,13 @@ JSON:"""
         poly_teams = self._extract_teams_from_title(p_title)
         
         for md in binary_markets:
+            question = md.get('question', '')
+            md['_question'] = question
+            md['_is_draw'] = bool(re.search(r'\b(draw|tie)\b', question.lower()))
+            team_m = re.match(r'^will\s+(.+?)\s+win\b', question, re.IGNORECASE)
+            if not team_m:
+                team_m = re.match(r'^(.+?)\s+to\s+win\b', question, re.IGNORECASE)
+            md['_question_team'] = team_m.group(1).strip() if team_m and not md['_is_draw'] else ''
             prices_raw = md.get('prices', [])
             outcomes = md.get('outcomes', [])
             yes_idx = outcomes.index('Yes') if 'Yes' in outcomes else 0
@@ -1260,19 +1300,41 @@ JSON:"""
                 continue
             
             k_yes_price = k_market.get('yes_ask', 50) / 100.0
+            k_team_norm = self._normalize_participant(k_yes_sub)
             
             best_market = None
-            best_diff = float('inf')
+            best_score = 0
             
             for md in binary_markets:
-                diff = abs(md['_yes_price'] - k_yes_price)
-                if diff < best_diff:
-                    best_diff = diff
+                if md.get('_is_draw', False):
+                    continue
+                q_team = md.get('_question_team', '')
+                if not q_team:
+                    continue
+                q_team_norm = self._normalize_participant(q_team)
+                score = 0
+                for kt in k_team_norm.split():
+                    if len(kt) >= 3 and token_matches_in_text(kt, q_team_norm):
+                        score += 1
+                for qt in q_team_norm.split():
+                    if len(qt) >= 3 and qt not in WEAK_WORDS and token_matches_in_text(qt, k_team_norm):
+                        score += 1
+                if score > best_score:
+                    best_score = score
                     best_market = md
             
-            if best_market is None or best_diff > 0.25:
-                self.stats['skipped_alignment_unknown'] = self.stats.get('skipped_alignment_unknown', 0) + 1
-                continue
+            if best_market is None:
+                best_diff = float('inf')
+                for md in binary_markets:
+                    if md.get('_is_draw', False):
+                        continue
+                    diff = abs(md['_yes_price'] - k_yes_price)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_market = md
+                if best_market is None or best_diff > 0.15:
+                    self.stats['skipped_alignment_unknown'] = self.stats.get('skipped_alignment_unknown', 0) + 1
+                    continue
             
             m_outcomes = best_market.get('outcomes', [])
             m_prices_raw = best_market.get('prices', [])
@@ -1298,19 +1360,12 @@ JSON:"""
                     k_no_team = p
                     break
             
-            matched_poly_team = '?'
-            if poly_teams:
-                ksub_norm = self._normalize_participant(k_yes_sub)
-                for pt in poly_teams:
-                    pt_norm = self._normalize_participant(pt)
-                    if any(len(tok) >= 3 and tok in pt_norm for tok in ksub_norm.split()):
-                        matched_poly_team = pt
-                        break
+            matched_poly_team = best_market.get('_question_team', '?')
             
             link = {
                 'fixture_id': k_title,
                 'alignment': 'BINARY_PRICE_MATCH',
-                'price_diff': round(best_diff, 4),
+                'price_diff': round(abs(best_market.get('_yes_price', 0.5) - k_yes_price), 4),
                 'poly_team_matched': matched_poly_team,
                 'kalshi': {
                     'market_id': k_market_ticker,
@@ -1325,6 +1380,7 @@ JSON:"""
                     'market_id': m_condition_id,
                     'slug': p_slug,
                     'token_ids': best_market.get('clob_token_ids', []) if best_market else [],
+                    'question': best_market.get('_question', ''),
                     'yes_outcome': 'Yes',
                     'no_outcome': 'No',
                     'yes_price': p_yes_price,
