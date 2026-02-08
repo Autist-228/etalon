@@ -151,7 +151,8 @@ class M0Orchestrator:
         # Создаём executor
         self.executor = ExecutorV2()
         
-        print(f"\n✅ M4 готов к исполнению вилок (мин. {validate_m4_config}%)")
+        from module4.config import MIN_FORK_PCT as m4_min_fork
+        print(f"\n✅ M4 готов к исполнению вилок (мин. {m4_min_fork}%)")
         print(f"   Executor будет получать вилки от M3")
     
     def run_sub_event_matching(self, snapshot, outcome_links):
