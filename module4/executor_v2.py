@@ -24,6 +24,7 @@ from module4.config import (
     DRY_RUN, MIN_FORK_PCT,
     MAX_TRADES_PER_SESSION, COOLDOWN_SECONDS, ORDER_FILL_TIMEOUT,
     EXECUTED_TRADES_FILE, TRADE_LOG_FILE,
+    MAX_POLY_STAKE, MAX_KALSHI_STAKE, POLY_MIN_SHARES, TOTAL_FEE,
 )
 from module4.kalshi_client import KalshiClient
 from module4.polymarket_client import PolymarketClient
@@ -161,30 +162,40 @@ class ExecutorV2:
     def calculate_stakes(self, poly_price: float, kalshi_price: float,
                         poly_min: float) -> Optional[StakeCalc]:
         """
-        ЛОГИКА РАСЧЁТА:
-        1. Poly stake = poly_min + $1.00
-        2. Kalshi stake = подстраивается
-        3. НЕТ ПРОВЕРОК ЛИМИТОВ! Калши просто подстраивается под Poly
+        ЛОГИКА РАСЧЁТА (с комиссией и лимитами):
+        1. Poly stake = poly_min + $1.00 (но не больше MAX_POLY_STAKE)
+        2. Kalshi stake = подстраивается (но не больше MAX_KALSHI_STAKE)
+        3. Комиссия 3% вычитается из ожидаемого возврата
+        4. Poly minimum 15 shares (платформенный лимит)
         """
-        # Шаг 1: Polymarket stake
-        poly_stake = poly_min + 1.00
+        poly_stake = min(poly_min + 1.00, MAX_POLY_STAKE)
         
-        # Шаг 2: Расчёт возврата с Polymarket
-        # price = вероятность (0-1)
-        # contracts = stake / price
-        # return = contracts * $1
         poly_contracts = poly_stake / poly_price
-        expected_return = poly_contracts
+        if poly_contracts < POLY_MIN_SHARES:
+            print(f"  ⚠️ SKIP: Poly {poly_contracts:.1f} shares < min {POLY_MIN_SHARES} (platform limit)")
+            return None
         
-        # Шаг 3: Kalshi stake (подстраивается под Poly!)
-        kalshi_stake = expected_return * kalshi_price
+        expected_return_gross = poly_contracts
+        expected_return = expected_return_gross * (1.0 - TOTAL_FEE)
         
-        # Минимальная проверка (Kalshi минимум $1 на платформе)
+        kalshi_contracts = round(expected_return_gross)
+        kalshi_stake = kalshi_contracts * kalshi_price
+        
+        if kalshi_stake > MAX_KALSHI_STAKE:
+            kalshi_contracts = int(MAX_KALSHI_STAKE / kalshi_price)
+            kalshi_stake = kalshi_contracts * kalshi_price
+            expected_return_gross = kalshi_contracts
+            expected_return = expected_return_gross * (1.0 - TOTAL_FEE)
+            poly_contracts = expected_return_gross
+            poly_stake = poly_contracts * poly_price
+        
         if kalshi_stake < 1.00:
             print(f"  ⚠️ SKIP: Kalshi stake ${kalshi_stake:.2f} < min $1.00 (platform limit)")
             return None
+        if kalshi_contracts < 1:
+            print(f"  ⚠️ SKIP: Kalshi contracts {kalshi_contracts} < 1")
+            return None
         
-        # Шаг 4: ROI
         total_stake = poly_stake + kalshi_stake
         profit = expected_return - total_stake
         actual_roi = (profit / total_stake) * 100 if total_stake > 0 else 0
@@ -197,7 +208,7 @@ class ExecutorV2:
             expected_profit=profit,
             actual_roi=actual_roi,
             poly_contracts=poly_contracts,
-            kalshi_contracts=expected_return
+            kalshi_contracts=kalshi_contracts
         )
     
     def can_execute(self, trade_id: str, fork_pct: float) -> Tuple[bool, str]:
@@ -319,6 +330,33 @@ class ExecutorV2:
         # === LIVE EXECUTION ===
         print(f"\n  🔴 LIVE MODE - EXECUTING")
         
+        # STEP 0: Balance check
+        print(f"\n  💰 Step 0: Checking balances...")
+        kalshi_balance = self.kalshi.get_balance()
+        poly_balance = self.polymarket.get_usdc_balance()
+        
+        if kalshi_balance is not None and kalshi_balance < stakes.kalshi_stake:
+            print(f"     ❌ ABORT: Kalshi balance ${kalshi_balance:.2f} < stake ${stakes.kalshi_stake:.2f}")
+            return TradeResult(
+                trade_id=trade_id, timestamp=timestamp, status='failed',
+                stakes=asdict(stakes),
+                kalshi_result={'error': 'insufficient_balance'},
+                poly_result={'status': 'not_attempted'},
+                error=f'Kalshi balance ${kalshi_balance:.2f} < stake ${stakes.kalshi_stake:.2f}'
+            )
+        if poly_balance is not None and poly_balance < stakes.poly_stake:
+            print(f"     ❌ ABORT: Poly balance ${poly_balance:.2f} < stake ${stakes.poly_stake:.2f}")
+            return TradeResult(
+                trade_id=trade_id, timestamp=timestamp, status='failed',
+                stakes=asdict(stakes),
+                kalshi_result={'status': 'not_attempted'},
+                poly_result={'error': 'insufficient_balance'},
+                error=f'Poly balance ${poly_balance:.2f} < stake ${stakes.poly_stake:.2f}'
+            )
+        print(f"     Kalshi: ${kalshi_balance:.2f} (need ${stakes.kalshi_stake:.2f})")
+        print(f"     Poly:   ${poly_balance:.2f} (need ${stakes.poly_stake:.2f})")
+        print(f"     ✅ Balances OK")
+        
         kalshi_result = {'status': 'not_attempted'}
         poly_result = {'status': 'not_attempted'}
         kalshi_order_id = None
@@ -327,14 +365,14 @@ class ExecutorV2:
         errors = []
         
         # STEP 1: Размещаем Kalshi ордер
+        kalshi_contracts = int(stakes.kalshi_contracts)
         print(f"\n  📤 Step 1: Placing Kalshi order...")
         print(f"     Ticker: {kalshi_ticker}")
         print(f"     Side: {kalshi_side.upper()}")
-        print(f"     Contracts: {int(stakes.kalshi_contracts)}")
+        print(f"     Contracts: {kalshi_contracts}")
         print(f"     Price: {kalshi_price:.1%}")
         
         try:
-            kalshi_contracts = int(stakes.kalshi_contracts)
             success, k_result = self.kalshi.place_order(
                 ticker=kalshi_ticker,
                 side=kalshi_side,
@@ -355,31 +393,36 @@ class ExecutorV2:
             print(f"     ❌ Kalshi exception: {e}")
         
         # STEP 2: Размещаем Polymarket ордер
+        poly_shares = stakes.poly_contracts
         print(f"\n  📤 Step 2: Placing Polymarket order...")
         print(f"     Token: {poly_token_id[:20]}...")
         print(f"     Side: BUY")
-        print(f"     Size: {stakes.poly_stake:.2f} USDC")
+        print(f"     Shares: {poly_shares:.2f} (=${stakes.poly_stake:.2f} USDC)")
         print(f"     Price: {poly_price:.1%}")
         
-        try:
-            success, p_result = self.polymarket.place_order(
-                token_id=poly_token_id,
-                side='BUY',
-                size=stakes.poly_stake,
-                price=poly_price
-            )
+        if not kalshi_order_id:
+            print(f"     ⚠️ SKIP Poly: Kalshi order failed, not placing second leg")
+            errors.append("Polymarket skipped: Kalshi order failed")
+        else:
+            try:
+                success, p_result = self.polymarket.place_order(
+                    token_id=poly_token_id,
+                    side='BUY',
+                    size=poly_shares,
+                    price=poly_price
+                )
             
-            poly_result = p_result
-            
-            if success:
-                poly_order_id = p_result.get('order_id')
-                print(f"     ✅ Polymarket order placed: {poly_order_id}")
-            else:
-                errors.append(f"Polymarket order failed: {p_result.get('error', 'unknown')}")
-                print(f"     ❌ Polymarket order failed: {p_result.get('error')}")
-        except Exception as e:
-            errors.append(f"Polymarket exception: {str(e)}")
-            print(f"     ❌ Polymarket exception: {e}")
+                poly_result = p_result
+                
+                if success:
+                    poly_order_id = p_result.get('order_id')
+                    print(f"     ✅ Polymarket order placed: {poly_order_id}")
+                else:
+                    errors.append(f"Polymarket order failed: {p_result.get('error', 'unknown')}")
+                    print(f"     ❌ Polymarket order failed: {p_result.get('error')}")
+            except Exception as e:
+                errors.append(f"Polymarket exception: {str(e)}")
+                print(f"     ❌ Polymarket exception: {e}")
         
         # STEP 3: Проверка исполнения
         print(f"\n  ⏳ Step 3: Waiting for fills (timeout {ORDER_FILL_TIMEOUT}s)...")
@@ -463,6 +506,30 @@ class ExecutorV2:
             if not poly_filled and poly_order_id:
                 self.polymarket.cancel_order(poly_order_id)
                 print(f"     🔴 Cancelled Polymarket order")
+            
+            # Пытаемся развернуть исполненную ногу (продать купленное)
+            print(f"     🔄 Attempting to unwind filled leg...")
+            if kalshi_filled and kalshi_order_id:
+                try:
+                    unwind_side = 'no' if kalshi_side == 'yes' else 'yes'
+                    self.kalshi.place_order(
+                        ticker=kalshi_ticker, side=unwind_side,
+                        contracts=kalshi_contracts, limit_price=None
+                    )
+                    print(f"     🔄 Kalshi unwind order placed (market sell)")
+                except Exception as e:
+                    errors.append(f"Kalshi unwind failed: {e}")
+                    print(f"     ❌ Kalshi unwind FAILED: {e}")
+            if poly_filled and poly_order_id:
+                try:
+                    self.polymarket.place_order(
+                        token_id=poly_token_id, side='SELL',
+                        size=poly_shares, price=None
+                    )
+                    print(f"     🔄 Polymarket unwind order placed (market sell)")
+                except Exception as e:
+                    errors.append(f"Poly unwind failed: {e}")
+                    print(f"     ❌ Poly unwind FAILED: {e}")
         
         # STEP 5: Создаём результат
         result = TradeResult(

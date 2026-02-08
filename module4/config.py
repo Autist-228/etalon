@@ -19,9 +19,17 @@ MAX_TRADES_PER_SESSION = int(os.getenv('MAX_TRADES_PER_SESSION', '1'))  # Мак
 COOLDOWN_SECONDS = int(os.getenv('COOLDOWN_SECONDS', '60'))  # Пауза между сделками
 ORDER_FILL_TIMEOUT = int(os.getenv('ORDER_FILL_TIMEOUT', '60'))  # Таймаут на исполнение ордера
 
-# ЛОГИКА СТАВОК (убрали MAX лимиты!)
-# Poly stake = poly_min + $1.00
-# Kalshi stake = подстраивается под Poly
+# ЛОГИКА СТАВОК
+# Poly stake = poly_min + $1.00 (но не больше MAX)
+# Kalshi stake = подстраивается под Poly (но не больше MAX)
+MAX_POLY_STAKE = float(os.getenv('MAX_POLY_STAKE', '2.50'))
+MAX_KALSHI_STAKE = float(os.getenv('MAX_KALSHI_STAKE', '5.00'))
+POLY_MIN_SHARES = int(os.getenv('POLY_MIN_SHARES', '5'))
+
+# Комиссии платформ
+KALSHI_FEE = 0.01
+POLYMARKET_FEE = 0.02
+TOTAL_FEE = KALSHI_FEE + POLYMARKET_FEE
 
 # === PROXY CONFIGURATION ===
 PROXY_HOST = os.getenv('PROXY_HOST', '')
@@ -120,7 +128,9 @@ def print_config():
     print("=" * 60)
     print(f"  DRY_RUN:                {DRY_RUN}")
     print(f"  MIN_FORK_PCT:           {MIN_FORK_PCT}%")
-    print(f"  STAKE LOGIC:            Poly = min + $1, Kalshi подстраивается")
+    print(f"  STAKE LOGIC:            Poly = min + $1 (max ${MAX_POLY_STAKE}), Kalshi adj (max ${MAX_KALSHI_STAKE})")
+    print(f"  TOTAL_FEE:              {TOTAL_FEE*100:.0f}% (Kalshi {KALSHI_FEE*100:.0f}% + Poly {POLYMARKET_FEE*100:.0f}%)")
+    print(f"  POLY_MIN_SHARES:        {POLY_MIN_SHARES}")
     print(f"  MAX_TRADES_PER_SESSION: {MAX_TRADES_PER_SESSION}")
     print(f"  COOLDOWN_SECONDS:       {COOLDOWN_SECONDS}")
     print(f"  ORDER_FILL_TIMEOUT:     {ORDER_FILL_TIMEOUT}s")

@@ -240,7 +240,7 @@ class PolymarketClient:
         Args:
             token_id: ID токена (YES или NO outcome)
             side: 'BUY' или 'SELL'
-            size: размер в USDC
+            size: количество shares (НЕ USD!)
             price: лимитная цена (0-1), если None - берём лучшую цену
         
         Returns:
