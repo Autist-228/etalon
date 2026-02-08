@@ -969,15 +969,6 @@ JSON:"""
         return None
     
     def _post_check(self, k_participants: List[str], p_event: Dict) -> bool:
-        """
-        Post-check: verify BOTH participants are in Poly event
-        
-        Requires ALL strong tokens (not just 2)
-        Word boundaries + variants + spelling + abbreviations
-        NO substring match!
-        
-        MECHANICAL check (no LLM!)
-        """
         p_title = p_event.get('event_title', '')
         
         for participant in k_participants:
@@ -1014,10 +1005,14 @@ JSON:"""
             found = sum(1 for t in strong_tokens if token_matches_in_text(t, p_title))
             if len(strong_tokens) <= 1:
                 if found < 1:
-                    return False
+                    aliases = self._get_aliases(participant)
+                    if not any(token_matches_in_text(a, p_title) for a in aliases):
+                        return False
             else:
                 if found < min(2, len(strong_tokens)):
-                    return False
+                    aliases = self._get_aliases(participant)
+                    if not any(token_matches_in_text(a, p_title) for a in aliases):
+                        return False
         
         return True
     
