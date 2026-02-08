@@ -32,6 +32,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from snapshot import TEAM_ALIASES
+
 WEAK_WORDS = {
     'fc', 'sc', 'bc', 'cf', 'ac', 'dc', 'sk', 'fk', 'as', 'kk', 'jk',
     'sv', 'vfl', 'vfb', 'tsg', 'ogc', 'rc', 'rcd', 'ud', 'ca', 'cd',
@@ -632,6 +634,18 @@ class OutcomeMatcherV2:
         
         return participants
     
+    @staticmethod
+    def _get_aliases(name: str) -> List[str]:
+        name_lower = name.strip().lower()
+        tokens = set(name_lower.split())
+        aliases = []
+        for city_tokens, nickname_tokens in TEAM_ALIASES:
+            if city_tokens <= tokens:
+                aliases.extend(nickname_tokens)
+            if nickname_tokens & tokens:
+                aliases.extend(city_tokens)
+        return aliases
+
     def _find_poly_candidates(
         self, 
         k_sport: str, 
@@ -639,17 +653,13 @@ class OutcomeMatcherV2:
         k_time: str,
         poly_events: List[Dict]
     ) -> List[Dict]:
-        """
-        Find Poly candidates where:
-        1. Same sport
-        2. BOTH participants present in event_title
-        3. Time matches (±4 hours)
-        """
         candidates = []
         
-        # Normalize participants
         k_p1_norm = self._normalize_participant(k_participants[0])
         k_p2_norm = self._normalize_participant(k_participants[1])
+        
+        p1_aliases = self._get_aliases(k_p1_norm)
+        p2_aliases = self._get_aliases(k_p2_norm)
         
         for p_event in poly_events:
             p_title = p_event.get('event_title', '')
@@ -669,8 +679,21 @@ class OutcomeMatcherV2:
             
             p_title_norm = self._normalize_participant(p_title)
             
-            if self._participant_in_text(k_p1_norm, p_title_norm) and \
-               self._participant_in_text(k_p2_norm, p_title_norm):
+            p1_found = self._participant_in_text(k_p1_norm, p_title_norm)
+            if not p1_found:
+                for alias in p1_aliases:
+                    if self._participant_in_text(alias, p_title_norm):
+                        p1_found = True
+                        break
+            
+            p2_found = self._participant_in_text(k_p2_norm, p_title_norm)
+            if not p2_found:
+                for alias in p2_aliases:
+                    if self._participant_in_text(alias, p_title_norm):
+                        p2_found = True
+                        break
+            
+            if p1_found and p2_found:
                 if not sport_ok:
                     p_event = dict(p_event)
                     p_event['_sport_mismatch'] = True

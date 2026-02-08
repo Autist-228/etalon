@@ -14,6 +14,68 @@ import re
 from rapidfuzz import fuzz
 
 
+TEAM_ALIASES = [
+    ({'atlanta'}, {'hawks'}),
+    ({'boston'}, {'celtics'}),
+    ({'brooklyn'}, {'nets'}),
+    ({'charlotte'}, {'hornets'}),
+    ({'chicago'}, {'bulls'}),
+    ({'cleveland'}, {'cavaliers', 'cavs'}),
+    ({'dallas'}, {'mavericks', 'mavs'}),
+    ({'denver'}, {'nuggets'}),
+    ({'detroit'}, {'pistons'}),
+    ({'golden', 'state'}, {'warriors'}),
+    ({'houston'}, {'rockets'}),
+    ({'indiana'}, {'pacers'}),
+    ({'los', 'angeles'}, {'clippers', 'lakers'}),
+    ({'memphis'}, {'grizzlies'}),
+    ({'miami'}, {'heat'}),
+    ({'milwaukee'}, {'bucks'}),
+    ({'minnesota'}, {'timberwolves', 'wolves'}),
+    ({'new', 'orleans'}, {'pelicans'}),
+    ({'new', 'york'}, {'knicks'}),
+    ({'oklahoma', 'city'}, {'thunder'}),
+    ({'orlando'}, {'magic'}),
+    ({'philadelphia'}, {'76ers', 'sixers'}),
+    ({'phoenix'}, {'suns'}),
+    ({'portland'}, {'blazers'}),
+    ({'sacramento'}, {'kings'}),
+    ({'san', 'antonio'}, {'spurs'}),
+    ({'toronto'}, {'raptors'}),
+    ({'utah'}, {'jazz'}),
+    ({'washington'}, {'wizards'}),
+    ({'tampa', 'bay'}, {'buccaneers', 'bucs', 'lightning', 'rays'}),
+    ({'green', 'bay'}, {'packers'}),
+    ({'kansas', 'city'}, {'chiefs', 'royals'}),
+    ({'pittsburgh'}, {'steelers', 'penguins', 'pirates'}),
+    ({'seattle'}, {'seahawks', 'kraken'}),
+    ({'baltimore'}, {'ravens', 'orioles'}),
+    ({'cincinnati'}, {'bengals', 'reds'}),
+    ({'jacksonville'}, {'jaguars', 'jags'}),
+    ({'buffalo'}, {'bills', 'sabres'}),
+    ({'carolina'}, {'panthers', 'hurricanes'}),
+    ({'arizona'}, {'cardinals', 'diamondbacks', 'coyotes'}),
+    ({'colorado'}, {'avalanche', 'rockies'}),
+    ({'columbus'}, {'blue', 'jackets'}),
+    ({'edmonton'}, {'oilers'}),
+    ({'calgary'}, {'flames'}),
+    ({'montreal'}, {'canadiens', 'habs'}),
+    ({'ottawa'}, {'senators', 'sens'}),
+    ({'vancouver'}, {'canucks'}),
+    ({'winnipeg'}, {'jets'}),
+]
+
+
+def _expand_with_aliases(tokens: Set[str]) -> Set[str]:
+    expanded = set(tokens)
+    for city_tokens, nickname_tokens in TEAM_ALIASES:
+        if city_tokens <= tokens:
+            expanded |= nickname_tokens
+        if nickname_tokens & tokens:
+            expanded |= city_tokens
+    return expanded
+
+
 def normalize_name(name: str) -> str:
     """Нормализация имени для сравнения.
     'Open Sud de France: Adrian Mannarino vs Arthur Gea' -> 'mannarino gea'
@@ -55,13 +117,13 @@ def normalize_name(name: str) -> str:
 
 
 def extract_key_tokens(name: str) -> Set[str]:
-    """Извлечь ключевые токены (фамилии, названия команд)."""
     normalized = normalize_name(name)
     tokens = set(normalized.split())
     noise = {'vs', 'the', 'fc', 'sc', 'cf', 'cd', 'ca', 'de', 'la', 'el',
              'set', 'match', 'over', 'under', 'game', 'round', 'bo3', 'bo5',
              'map', 'total', 'spread', 'esports', 'gaming', 'team'}
-    return tokens - noise
+    tokens = tokens - noise
+    return _expand_with_aliases(tokens)
 
 
 def events_match(kalshi_title: str, poly_title: str, threshold: int = 65) -> bool:
