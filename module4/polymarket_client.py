@@ -368,7 +368,7 @@ class PolymarketClient:
                 return False
         
         try:
-            result = self.clob_client.cancel_order(order_id)
+            result = self.clob_client.cancel(order_id)
             return result is not None
             
         except Exception as e:
