@@ -15,7 +15,7 @@ Fork Calculator v3 - расчёт вилок с учётом alignment + 3-way �
 from typing import Dict, Optional, Tuple, List
 from dataclasses import dataclass
 
-from .config import KALSHI_FEE, POLYMARKET_FEE, TOTAL_FEE
+from .config import KALSHI_FEE, POLYMARKET_FEE, TOTAL_FEE, kalshi_taker_fee, poly_taker_fee
 
 
 @dataclass
@@ -54,6 +54,7 @@ class ForkCalculator:
         self.kalshi_fee = kalshi_fee
         self.poly_fee = poly_fee
         self.total_fee = kalshi_fee + poly_fee
+        self.use_dynamic_fees = True
     
     def calculate_from_outcome_link(self, outcome_link: Dict, 
                                      kalshi_prices: Dict = None, 
@@ -110,12 +111,10 @@ class ForkCalculator:
         strategies = []
         
         if alignment == 'SAME':
-            # YES на обеих = один и тот же исход
-            # Для вилки берём ПРОТИВОПОЛОЖНЫЕ стороны
-            
-            # Стратегия 1: Kalshi YES + Poly NO
-            cost1 = k_yes + p_no
-            net_return1 = 1.0 - self.total_fee
+            k_fee_1 = kalshi_taker_fee(k_yes) if self.use_dynamic_fees else 0
+            p_fee_1 = 0.0
+            cost1 = k_yes + k_fee_1 + p_no + p_fee_1
+            net_return1 = 1.0
             profit1 = net_return1 - cost1
             fork_pct1 = (profit1 / cost1) * 100 if cost1 > 0 else -100
             
@@ -130,9 +129,10 @@ class ForkCalculator:
                 'fork_pct': fork_pct1,
             })
             
-            # Стратегия 2: Kalshi NO + Poly YES
-            cost2 = k_no + p_yes
-            net_return2 = 1.0 - self.total_fee
+            k_fee_2 = kalshi_taker_fee(k_no) if self.use_dynamic_fees else 0
+            p_fee_2 = 0.0
+            cost2 = k_no + k_fee_2 + p_yes + p_fee_2
+            net_return2 = 1.0
             profit2 = net_return2 - cost2
             fork_pct2 = (profit2 / cost2) * 100 if cost2 > 0 else -100
             
@@ -148,12 +148,10 @@ class ForkCalculator:
             })
             
         else:  # alignment == 'OPPOSITE'
-            # YES на Kalshi = NO на Poly (по смыслу)
-            # Для вилки берём ОДИНАКОВЫЕ стороны
-            
-            # Стратегия 1: Kalshi YES + Poly YES
-            cost1 = k_yes + p_yes
-            net_return1 = 1.0 - self.total_fee
+            k_fee_1 = kalshi_taker_fee(k_yes) if self.use_dynamic_fees else 0
+            p_fee_1 = 0.0
+            cost1 = k_yes + k_fee_1 + p_yes + p_fee_1
+            net_return1 = 1.0
             profit1 = net_return1 - cost1
             fork_pct1 = (profit1 / cost1) * 100 if cost1 > 0 else -100
             
@@ -168,9 +166,10 @@ class ForkCalculator:
                 'fork_pct': fork_pct1,
             })
             
-            # Стратегия 2: Kalshi NO + Poly NO
-            cost2 = k_no + p_no
-            net_return2 = 1.0 - self.total_fee
+            k_fee_2 = kalshi_taker_fee(k_no) if self.use_dynamic_fees else 0
+            p_fee_2 = 0.0
+            cost2 = k_no + k_fee_2 + p_no + p_fee_2
+            net_return2 = 1.0
             profit2 = net_return2 - cost2
             fork_pct2 = (profit2 / cost2) * 100 if cost2 > 0 else -100
             

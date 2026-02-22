@@ -343,14 +343,29 @@ class PricesFetcher:
                     bids = book.get('bids', [])
                     asks = book.get('asks', [])
                     
-                    best_bid = max((float(b['price']) for b in bids), default=mid - 0.01)
-                    best_ask = min((float(a['price']) for a in asks), default=mid + 0.01)
+                    best_bid = max((float(b['price']) for b in bids), default=None)
+                    best_ask = min((float(a['price']) for a in asks), default=None)
                     
-                    return {
-                        'bid': best_bid,
-                        'ask': best_ask,
-                        'mid': mid,
-                    }
+                    if best_bid is not None and best_ask is not None:
+                        return {
+                            'bid': best_bid,
+                            'ask': best_ask,
+                            'mid': mid,
+                        }
+                    elif best_bid is not None:
+                        return {
+                            'bid': best_bid,
+                            'ask': best_bid,
+                            'mid': mid,
+                            'no_asks': True,
+                        }
+                    elif best_ask is not None:
+                        return {
+                            'bid': best_ask,
+                            'ask': best_ask,
+                            'mid': mid,
+                            'no_bids': True,
+                        }
                 
                 return {'bid': mid, 'ask': mid, 'mid': mid}
             

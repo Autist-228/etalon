@@ -488,6 +488,7 @@ class OutcomeMatcherV2:
         print("="*80)
         print("🔗 OUTCOME MATCHER V2 (KALSHI-FIRST, FAIL-SAFE)")
         print("="*80)
+        self.stats['total_poly_events'] = len(poly_events)
         print(f"📊 Kalshi events: {len(kalshi_events)}")
         print(f"📊 Polymarket events: {len(poly_events)}")
         print()
@@ -1279,6 +1280,7 @@ JSON:"""
                     'market_id': p_condition_id,
                     'slug': p_event.get('event_slug', ''),
                     'token_ids': best_md.get('clob_token_ids', []) if best_md else [],
+                    'question': best_md.get('question', '') if best_md else '',
                     'yes_outcome': p_outcomes[0] if len(p_outcomes) > 0 else '?',
                     'no_outcome': p_outcomes[1] if len(p_outcomes) > 1 else '?',
                     'yes_price': p_yes_aligned,

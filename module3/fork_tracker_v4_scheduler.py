@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from module3.prices_fetcher import PricesFetcher
 from module3.fork_calculator import ForkCalculator
 from module3.limits_checker import LimitsChecker
-from module3.config import POSITIVE_FORK_THRESHOLD, TOTAL_FEE, Colors
+from module3.config import POSITIVE_FORK_THRESHOLD, TOTAL_FEE, Colors, kalshi_taker_fee, poly_taker_fee
 
 # === ДИАГНОСТИЧЕСКИЕ ФУНКЦИИ ДЛЯ ЧЕК-ЛИСТА ===
 def _ts():
@@ -312,21 +312,35 @@ class ForkTrackerV4:
             self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="closed_filter")
             return None
         
-        # 5) ПРАВИЛЬНЫЙ РАСЧЁТ ВИЛКИ с учётом alignment!
-        # DIRECT/BINARY_PRICE_MATCH: K_YES и P_YES = одна и та же команда
-        #   Hedge1: K_YES + P_NO, Hedge2: K_NO + P_YES
-        # FLIPPED: K_YES = Team A, P_YES = Team B (противоположные!)
-        #   Hedge1: K_YES + P_YES (разные команды = хедж!)
-        #   Hedge2: K_NO + P_NO (разные команды = хедж!)
-        if alignment == 'FLIPPED':
-            cost1 = k_yes_ask + p_yes_ask
-            cost2 = k_no_ask + p_no_ask
-        else:
-            cost1 = k_yes_ask + p_no_ask
-            cost2 = k_no_ask + p_yes_ask
+        # 5) ПРАВИЛЬНЫЙ РАСЧЁТ ВИЛКИ с ДИНАМИЧЕСКИМИ комиссиями!
+        # Kalshi: fee = round_up(0.07 * P * (1-P)) per contract (taker)
+        # Polymarket: 0% for most sports, 0.0175 * P * (1-P) for NCAAB/Serie A
+        import re
+        sport_code = ''
+        k_ticker = k_data.get('market_id', '')
+        m_sport = re.match(r'KX([A-Z]+?)(?:GAME|MAP|MATCH|TOTAL|SPREAD|BTTS|MARGIN)-', k_ticker.upper())
+        if m_sport:
+            sport_code = m_sport.group(1)
         
-        edge1 = 1.0 - TOTAL_FEE - cost1
-        edge2 = 1.0 - TOTAL_FEE - cost2
+        if alignment == 'FLIPPED':
+            k_fee1 = kalshi_taker_fee(k_yes_ask)
+            p_fee1 = poly_taker_fee(p_yes_ask, sport_code)
+            cost1 = k_yes_ask + k_fee1 + p_yes_ask + p_fee1
+            
+            k_fee2 = kalshi_taker_fee(k_no_ask)
+            p_fee2 = poly_taker_fee(p_no_ask, sport_code)
+            cost2 = k_no_ask + k_fee2 + p_no_ask + p_fee2
+        else:
+            k_fee1 = kalshi_taker_fee(k_yes_ask)
+            p_fee1 = poly_taker_fee(p_no_ask, sport_code)
+            cost1 = k_yes_ask + k_fee1 + p_no_ask + p_fee1
+            
+            k_fee2 = kalshi_taker_fee(k_no_ask)
+            p_fee2 = poly_taker_fee(p_yes_ask, sport_code)
+            cost2 = k_no_ask + k_fee2 + p_yes_ask + p_fee2
+        
+        edge1 = 1.0 - cost1
+        edge2 = 1.0 - cost2
         
         edge = max(edge1, edge2)
         fork_pct = edge * 100.0
