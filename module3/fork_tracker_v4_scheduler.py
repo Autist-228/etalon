@@ -293,12 +293,12 @@ class ForkTrackerV4:
         overround_k = (k_yes_ask + k_no_ask) - 1.0
         overround_p = (p_yes_ask + p_no_ask) - 1.0
         
-        if overround_k > 0.10:  # Kalshi спред >10%
-            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="overround_k_gt_10pct")
+        if overround_k > 0.15:  # Kalshi спред >15%
+            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="overround_k_gt_15pct")
             return None
         
-        if overround_p > 0.04:  # Poly спред >4%
-            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="overround_p_gt_4pct")
+        if overround_p > 0.15:  # Poly спред >15% (was 4%, too strict with 0% poly fee)
+            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="overround_p_gt_15pct")
             return None
         
         # 3) SPREAD TOO WIDE (нет ликвидности)
@@ -405,7 +405,7 @@ class ForkTrackerV4:
         result = {
             'type': '2way',
             'link_id': scheduled.link_id,
-            'fixture_title': link.get('fixture_title', ''),
+            'fixture_title': link.get('fixture_id', link.get('fixture_title', '')),
             'market_type': link.get('market_type', ''),
             'outcome_key': link.get('outcome_key', ''),
             'fork': fork_result,
