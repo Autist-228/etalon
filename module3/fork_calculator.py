@@ -270,8 +270,8 @@ class ForkCalculator:
             }
             total_cost += best_price
         
-        # Рассчитываем арбитраж
-        net_return = 1.0 - self.total_fee
+        total_kalshi_fee = sum(kalshi_taker_fee(s['price']) for s in strategy.values() if s['platform'] == 'kalshi')
+        net_return = 1.0 - total_kalshi_fee
         profit = net_return - total_cost
         arbitrage_percent = (profit / total_cost) * 100 if total_cost > 0 else -100
         
