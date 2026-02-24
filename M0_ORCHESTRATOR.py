@@ -347,8 +347,8 @@ def main():
     """Точка входа"""
     import argparse
     parser = argparse.ArgumentParser(description='M0 Orchestrator')
-    parser.add_argument('--mode', choices=M0Orchestrator.VALID_MODES, default='all',
-                        help='Event filter mode: all | live_only | upcoming_only')
+    parser.add_argument('--mode', choices=M0Orchestrator.VALID_MODES, default='live_only',
+                        help='Event filter mode: all | live_only | upcoming_only (default: live_only)')
     parser.add_argument('--hours', type=int, default=6,
                         help='Hours ahead window for M1 snapshot (default: 6)')
     args = parser.parse_args()

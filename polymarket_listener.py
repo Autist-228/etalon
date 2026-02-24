@@ -18,8 +18,9 @@ GAME_BETS_TAG_ID = 100639  # Конкретные матчи
 
 
 class PolymarketListener:
-    def __init__(self, hours_ahead: int = 6):
+    def __init__(self, hours_ahead: int = 6, live_only: bool = False):
         self.hours_ahead = hours_ahead
+        self.live_only = live_only
         self.events: List[Dict] = []
         self.markets_map: Dict[str, Dict] = {}
         
@@ -103,14 +104,6 @@ class PolymarketListener:
         return all_events
     
     def filter_live_and_upcoming(self, events: List[Dict]) -> List[Dict]:
-        """Фильтровать события - только live или в ближайшие N часов.
-        
-        ВАЖНО: Используем gameStartTime (реальное время начала матча),
-        а НЕ endDate (дедлайн закрытия маркета на платформе, обычно +7 дней).
-        
-        Логика: берём события где gameStartTime попадает в окно [now - 3h, now + 6h].
-        now - 3h нужен чтобы захватить матчи которые уже идут (начались до 3ч назад).
-        """
         now = self.get_current_time()
         cutoff = now + timedelta(hours=self.hours_ahead)
         live_start = now - timedelta(hours=3)
@@ -131,7 +124,17 @@ class PolymarketListener:
                 skipped_no_gst += 1
                 continue
             
-            if live_start <= game_start <= cutoff:
+            title = event.get('title', '')
+            if ' - More Markets' in title:
+                continue
+
+            if self.live_only:
+                if game_start > now:
+                    continue
+            elif not (live_start <= game_start <= cutoff):
+                continue
+
+            if True:
                 hours_left = (game_start - now).total_seconds() / 3600
                 
                 markets = event.get('markets', [])
@@ -299,20 +302,26 @@ class PolymarketListener:
 
 
 def main():
-    listener = PolymarketListener(hours_ahead=6)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--live-only', action='store_true')
+    parser.add_argument('--hours', type=int, default=6)
+    args = parser.parse_args()
+
+    listener = PolymarketListener(hours_ahead=args.hours, live_only=args.live_only)
     result = listener.run()
-    
+
+    mode_str = 'LIVE ONLY' if args.live_only else f'{args.hours}h window'
     print(f"\n{'='*80}")
-    print(f"POLYMARKET РЕЗУЛЬТАТ")
+    print(f"POLYMARKET ({mode_str})")
     print(f"{'='*80}")
-    print(f"Спортивных событий на ближайшие 6ч: {result['total_count']}")
-    
+    print(f"Events: {result['total_count']}")
+
     if result['events']:
-        print(f"\n📋 События:")
         for i, e in enumerate(result['events'][:20], 1):
-            vol = f"${e['volume']:,.0f}" if e['volume'] else "N/A"
-            print(f"  {i:2}. {e['event_title'][:50]}... | {e['hours_left']:.1f}ч | {vol}")
-    
+            vol = f"${e['volume']:,.0f}" if e['volume'] else 'N/A'
+            print(f"  {i:2}. {e['event_title'][:50]}... | {e['hours_left']:.1f}h | {vol}")
+
     return result
 
 

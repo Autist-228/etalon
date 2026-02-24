@@ -11,7 +11,35 @@ from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Set, Tuple
 from datetime import datetime, timezone
 import re
+import unicodedata
 from rapidfuzz import fuzz
+
+
+UNICODE_MAP = {
+    'ø': 'o', 'Ø': 'O', 'æ': 'ae', 'Æ': 'AE', 'ð': 'd', 'Ð': 'D',
+    'þ': 'th', 'Þ': 'TH', 'ł': 'l', 'Ł': 'L', 'ß': 'ss', 'đ': 'd', 'Đ': 'D',
+    'ü': 'u', 'Ü': 'U', 'ö': 'o', 'Ö': 'O', 'ä': 'a', 'Ä': 'A',
+    'ğ': 'g', 'Ğ': 'G', 'ş': 's', 'Ş': 'S', 'ç': 'c', 'Ç': 'C',
+    'ñ': 'n', 'Ñ': 'N', 'ã': 'a', 'Ã': 'A', 'õ': 'o', 'Õ': 'O',
+    'í': 'i', 'Í': 'I', 'á': 'a', 'Á': 'A', 'é': 'e', 'É': 'E',
+    'ó': 'o', 'Ó': 'O', 'ú': 'u', 'Ú': 'U', 'ý': 'y', 'Ý': 'Y',
+    'ė': 'e', 'ę': 'e', 'ą': 'a', 'ś': 's', 'ź': 'z', 'ż': 'z',
+    'ć': 'c', 'ń': 'n', 'ů': 'u', 'ř': 'r', 'ě': 'e', 'š': 's',
+    'č': 'c', 'ž': 'z', 'ț': 't', 'ă': 'a',
+}
+
+
+def transliterate(text: str) -> str:
+    result = []
+    for ch in text:
+        if ch in UNICODE_MAP:
+            result.append(UNICODE_MAP[ch])
+        else:
+            result.append(ch)
+    s = ''.join(result)
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    return unicodedata.normalize('NFC', s)
 
 
 TEAM_ALIASES = [
@@ -38,7 +66,7 @@ TEAM_ALIASES = [
     ({'orlando'}, {'magic'}),
     ({'philadelphia'}, {'76ers', 'sixers'}),
     ({'phoenix'}, {'suns'}),
-    ({'portland'}, {'blazers'}),
+    ({'portland'}, {'blazers', 'trail'}),
     ({'sacramento'}, {'kings'}),
     ({'san', 'antonio'}, {'spurs'}),
     ({'toronto'}, {'raptors'}),
@@ -99,6 +127,60 @@ TEAM_ALIASES = [
     ({'arizona', 'state'}, {'sun', 'devils'}),
     ({'ucla'}, {'bruins'}),
     ({'usc'}, {'trojans'}),
+    ({'inter'}, {'internazionale', 'inter', 'milano'}),
+    ({'internazionale'}, {'inter', 'milano'}),
+    ({'bodoe'}, {'bodo', 'glimt', 'bodoglimt'}),
+    ({'bodo'}, {'bodoe', 'glimt', 'bodoglimt'}),
+    ({'qarabag'}, {'qarabag', 'agdam'}),
+    ({'qpr'}, {'queens', 'park', 'rangers'}),
+    ({'queens', 'park', 'rangers'}, {'qpr'}),
+    ({'west', 'brom'}, {'west', 'bromwich', 'albion', 'wba'}),
+    ({'wba'}, {'west', 'bromwich', 'albion'}),
+    ({'newcastle'}, {'newcastle', 'united'}),
+    ({'leverkusen'}, {'bayer', 'leverkusen', 'bayer04'}),
+    ({'olympiakos'}, {'olympiacos', 'olympiakos'}),
+    ({'olympiacos'}, {'olympiakos', 'olympiacos'}),
+    ({'psg'}, {'paris', 'saint', 'germain'}),
+    ({'paris'}, {'psg', 'saint', 'germain'}),
+    ({'juventus'}, {'juve'}),
+    ({'juve'}, {'juventus'}),
+    ({'bvb'}, {'borussia', 'dortmund'}),
+    ({'borussia', 'dortmund'}, {'bvb'}),
+    ({'psv'}, {'eindhoven', 'psv'}),
+    ({'eindhoven'}, {'psv'}),
+    ({'fenerbahce'}, {'fenerbahce'}),
+    ({'besiktas'}, {'besiktas'}),
+    ({'galatasaray'}, {'galatasaray'}),
+    ({'sporting'}, {'sporting', 'lisboa', 'lisbon'}),
+    ({'benfica'}, {'benfica', 'lisboa'}),
+    ({'porto'}, {'porto'}),
+    ({'ajax'}, {'ajax', 'amsterdam'}),
+    ({'feyenoord'}, {'feyenoord', 'rotterdam'}),
+    ({'az'}, {'alkmaar', 'az'}),
+    ({'alkmaar'}, {'az'}),
+    ({'ac', 'milan'}, {'milan', 'rossoneri'}),
+    ({'napoli'}, {'napoli', 'ssc'}),
+    ({'roma'}, {'roma', 'as'}),
+    ({'lazio'}, {'lazio', 'ss'}),
+    ({'atletico'}, {'atletico', 'madrid'}),
+    ({'real', 'madrid'}, {'real'}),
+    ({'barcelona'}, {'barca'}),
+    ({'barca'}, {'barcelona'}),
+    ({'bayern'}, {'bayern', 'munich', 'munchen'}),
+    ({'munich'}, {'bayern', 'munchen'}),
+    ({'man', 'city'}, {'manchester', 'city', 'mcfc'}),
+    ({'manchester', 'city'}, {'man', 'city', 'mcfc'}),
+    ({'man', 'utd'}, {'manchester', 'united', 'mufc'}),
+    ({'manchester', 'united'}, {'man', 'utd', 'mufc'}),
+    ({'liverpool'}, {'liverpool'}),
+    ({'chelsea'}, {'chelsea'}),
+    ({'arsenal'}, {'arsenal'}),
+    ({'tottenham'}, {'spurs', 'hotspur'}),
+    ({'wolves'}, {'wolverhampton', 'wanderers', 'wwfc'}),
+    ({'wolverhampton'}, {'wolves', 'wwfc'}),
+    ({'nott', 'forest'}, {'nottingham', 'forest', 'nffc'}),
+    ({'nottingham'}, {'nott', 'forest', 'nffc'}),
+    ({'sheffield', 'utd'}, {'sheffield', 'united', 'sufc'}),
 ]
 
 
@@ -113,12 +195,7 @@ def _expand_with_aliases(tokens: Set[str]) -> Set[str]:
 
 
 def normalize_name(name: str) -> str:
-    """Нормализация имени для сравнения.
-    'Open Sud de France: Adrian Mannarino vs Arthur Gea' -> 'mannarino gea'
-    'Mannarino vs Gea' -> 'mannarino gea'
-    """
-    name = name.lower()
-    
+    name = transliterate(name).lower()
     name = name.replace(' - more markets', '')
     name = name.replace(': total points', '').replace(': totals', '')
     name = name.replace(': spreads', '').replace(': spread', '')
@@ -131,24 +208,16 @@ def normalize_name(name: str) -> str:
     name = name.replace(': anytime goal', '').replace(': first goal', '')
     name = name.replace(': winning margin', '').replace(': team totals', '')
     name = name.replace(' total maps', '').replace(' map 1', '').replace(' map 2', '').replace(' map 3', '')
-    
     name = re.sub(r'^.*?:\s*', '', name)
-    
     for prefix in ['(w)', '(m)', 'women\'s', 'men\'s', 'qualification:']:
         name = name.replace(prefix, '')
-    
     name = re.sub(r'\s+vs\.?\s+', ' ', name)
-    
     name = re.sub(r'\(bo\d+\)', '', name)
     name = re.sub(r'\(game\s*\d+\)', '', name)
-    
     name = name.replace('-', ' ')
-    
     name = re.sub(r'[^a-z0-9\s]', '', name)
-    
     tokens = name.split()
     tokens = [t for t in tokens if len(t) > 1]
-    
     return ' '.join(tokens)
 
 
@@ -162,32 +231,23 @@ def extract_key_tokens(name: str) -> Set[str]:
     return _expand_with_aliases(tokens)
 
 
-def events_match(kalshi_title: str, poly_title: str, threshold: int = 65) -> bool:
-    """Проверить совпадают ли два события (Kalshi vs Polymarket).
-    
-    Использует комбинацию:
-    1. Fuzzy match нормализованных имён
-    2. Пересечение ключевых токенов (фамилии игроков / названия команд)
-    """
+def events_match(kalshi_title: str, poly_title: str, threshold: int = 60) -> bool:
     k_norm = normalize_name(kalshi_title)
     p_norm = normalize_name(poly_title)
-    
     if k_norm == p_norm:
         return True
-    
     ratio = fuzz.token_sort_ratio(k_norm, p_norm)
     if ratio >= threshold:
         return True
-    
     k_tokens = extract_key_tokens(kalshi_title)
     p_tokens = extract_key_tokens(poly_title)
-    
-    if len(k_tokens) >= 2 and len(p_tokens) >= 2:
+    if k_tokens and p_tokens:
         overlap = k_tokens & p_tokens
+        if len(overlap) >= 2:
+            return True
         min_tokens = min(len(k_tokens), len(p_tokens))
         if min_tokens > 0 and len(overlap) / min_tokens >= 0.5:
             return True
-    
     return False
 
 
@@ -306,52 +366,38 @@ class Snapshot:
 
 
 def create_snapshot(hours_ahead: int = 6, mode: str = 'all') -> Snapshot:
-    """
-    Создать слепок данных через M1.
-    
-    Args:
-        hours_ahead: окно вперёд в часах
-        mode: 'all' | 'live_only' | 'upcoming_only'
-    
-    Returns:
-        Snapshot с отфильтрованными данными
-    """
     from kalshi_listener import KalshiListener
     from polymarket_listener import PolymarketListener
-    
+
+    live_only = (mode == 'live_only')
     mode_label = {'all': 'live + upcoming', 'live_only': 'LIVE ONLY', 'upcoming_only': 'UPCOMING ONLY'}
     print(f"\n{'='*60}")
-    print(f"  M1 SNAPSHOT (окно: {hours_ahead}ч, режим: {mode_label.get(mode, mode)})")
+    print(f"  M1 SNAPSHOT ({hours_ahead}h, {mode_label.get(mode, mode)})")
     print(f"{'='*60}")
-    
-    kalshi = KalshiListener(hours_ahead=hours_ahead)
+
+    kalshi = KalshiListener(hours_ahead=hours_ahead, live_only=live_only)
     kalshi_result = kalshi.run()
     kalshi_raw = kalshi_result['events']
-    
-    poly = PolymarketListener(hours_ahead=hours_ahead)
+
+    poly = PolymarketListener(hours_ahead=hours_ahead, live_only=live_only)
     poly_result = poly.run()
     poly_raw = poly_result['events']
-    
-    if mode == 'live_only':
-        kalshi_raw = [e for e in kalshi_raw if e.get('hours_left', 0) < 0]
-        poly_raw = [e for e in poly_raw if e.get('hours_left', 0) < 0]
-        print(f"   MODE live_only: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
-    elif mode == 'upcoming_only':
+
+    if mode == 'upcoming_only':
         kalshi_raw = [e for e in kalshi_raw if e.get('hours_left', 0) >= 0]
         poly_raw = [e for e in poly_raw if e.get('hours_left', 0) >= 0]
-        print(f"   MODE upcoming_only: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
-    
-    print(f"\n   ДО кросс-фильтрации: Kalshi={len(kalshi_raw)}, Polymarket={len(poly_raw)}")
-    
+
+    print(f"   Before cross-filter: Kalshi={len(kalshi_raw)}, Poly={len(poly_raw)}")
+
     filtered_kalshi, filtered_poly = cross_filter(kalshi_raw, poly_raw)
-    
-    print(f"   ПОСЛЕ кросс-фильтрации: Kalshi={len(filtered_kalshi)}, Polymarket={len(filtered_poly)}")
-    
+
+    print(f"   After cross-filter: Kalshi={len(filtered_kalshi)}, Poly={len(filtered_poly)}")
+
     dropped_k = len(kalshi_raw) - len(filtered_kalshi)
     dropped_p = len(poly_raw) - len(filtered_poly)
     if dropped_k > 0 or dropped_p > 0:
-        print(f"   Отброшено (нет на другой платформе): Kalshi={dropped_k}, Polymarket={dropped_p}")
-    
+        print(f"   Dropped (no match): Kalshi={dropped_k}, Poly={dropped_p}")
+
     snapshot = Snapshot(
         snapshot_ts=datetime.now(timezone.utc).isoformat(),
         kalshi_events=filtered_kalshi,
@@ -366,7 +412,6 @@ def create_snapshot(hours_ahead: int = 6, mode: str = 'all') -> Snapshot:
             'poly_dropped': dropped_p,
         }
     )
-    
-    print(f"\n   Слепок создан: {snapshot}")
-    
+
+    print(f"   Snapshot: {snapshot}")
     return snapshot

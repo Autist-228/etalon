@@ -56,82 +56,72 @@ WEAK_WORDS = {
     'caprabo', 'forca', 'csp', 'cb',
 }
 
-SPELLING_VARIANTS = {
-    'ittifaq': ['ettifaq'],
-    'ettifaq': ['ittifaq'],
-    'olympiakos': ['olympiacos'],
-    'olympiacos': ['olympiakos'],
-    'ittihad': ['ettihad'],
-    'ettihad': ['ittihad'],
-    'dynamo': ['dinamo'],
-    'dinamo': ['dynamo'],
-    'zenit': ['zenith'],
-    'zenith': ['zenit'],
-    'lokomotiv': ['lokomotiva'],
-    'lokomotiva': ['lokomotiv'],
-    'trabzonspor': ['trabzon'],
-    'trabzon': ['trabzonspor'],
-    'cska': ['cska moscow', 'cska moskva'],
-    'spartak': ['spartac'],
-    'spartac': ['spartak'],
-    'juventus': ['juve'],
-    'juve': ['juventus'],
-    'internazionale': ['inter'],
-    'borussia': ['bvb'],
-    'bvb': ['borussia dortmund'],
-    'munich': ['munchen', 'münchen'],
-    'munchen': ['munich'],
-    'hamburg': ['hamburger'],
-    'hamburger': ['hamburg'],
-    'timra': ['timraa'],
-    'timraa': ['timra'],
-    'frolunda': ['froelunda'],
-    'froelunda': ['frolunda'],
-    'lulea': ['luleaa'],
-    'luleaa': ['lulea'],
-    'brynas': ['brynaes'],
-    'brynaes': ['brynas'],
-    'orebro': ['oerebro'],
-    'oerebro': ['orebro'],
-    'farjestad': ['faerjestad'],
-    'faerjestad': ['farjestad'],
-    'djurgardens': ['djurgaarden', 'djurgarden'],
-    'djurgaarden': ['djurgardens', 'djurgarden'],
-    'djurgarden': ['djurgardens', 'djurgaarden'],
-    'linkoping': ['linkoeping'],
-    'linkoeping': ['linkoping'],
-    'skelleftea': ['skellefteaa'],
-    'skellefteaa': ['skelleftea'],
-    'leksands': ['leksand'],
-    'leksand': ['leksands'],
-    'dn soopers': ['dn freecs', 'dn sooper'],
-    'dn freecs': ['dn soopers'],
-    'cordoba': ['córdoba'],
-    'córdoba': ['cordoba'],
-    'union': ['unión'],
-    'unión': ['union'],
-    'vicente': ['gil vicente', 'barcelos'],
-    'nijmegen': ['nec'],
-    'nec': ['nijmegen'],
-    'caliente': ['tijuana'],
-    'copenhagen': ['kobenhavn', 'koebenhavn'],
-    'kobenhavn': ['copenhagen', 'koebenhavn'],
-    'koebenhavn': ['copenhagen', 'kobenhavn'],
-    'eindhoven': ['psv', 'psv eindhoven'],
-    'psv': ['eindhoven', 'psv eindhoven'],
-    'alkmaar': ['az', 'az alkmaar'],
-    'az': ['alkmaar', 'az alkmaar'],
-    'goztepe': ['goeztepe', 'goztepe izmir'],
-    'goeztepe': ['goztepe', 'goztepe izmir'],
-    'cologne': ['koln', 'koeln'],
-    'koln': ['cologne', 'koeln'],
-    'koeln': ['cologne', 'koln'],
-    'soenderjyske': ['sonderjyske'],
-    'sonderjyske': ['soenderjyske'],
-    'nordsjaelland': ['nordsjælland', 'nordsjaeland'],
-    'bilbao': ['athletic', 'athletic bilbao'],
-    'athletic': ['bilbao', 'athletic bilbao'],
-}
+_SPELLING_PAIRS = [
+    ('ittifaq', 'ettifaq'),
+    ('olympiakos', 'olympiacos'),
+    ('ittihad', 'ettihad'),
+    ('dynamo', 'dinamo'),
+    ('zenit', 'zenith'),
+    ('lokomotiv', 'lokomotiva'),
+    ('trabzonspor', 'trabzon'),
+    ('spartak', 'spartac'),
+    ('juventus', 'juve'),
+    ('internazionale', 'inter'),
+    ('inter', 'internazionale'),
+    ('borussia', 'bvb'),
+    ('bvb', 'borussia dortmund'),
+    ('munich', 'munchen'),
+    ('hamburg', 'hamburger'),
+    ('timra', 'timraa'),
+    ('frolunda', 'froelunda'),
+    ('lulea', 'luleaa'),
+    ('brynas', 'brynaes'),
+    ('orebro', 'oerebro'),
+    ('farjestad', 'faerjestad'),
+    ('djurgardens', 'djurgaarden'),
+    ('djurgardens', 'djurgarden'),
+    ('linkoping', 'linkoeping'),
+    ('skelleftea', 'skellefteaa'),
+    ('leksands', 'leksand'),
+    ('dn soopers', 'dn freecs'),
+    ('cordoba', 'cordoba'),
+    ('nijmegen', 'nec'),
+    ('caliente', 'tijuana'),
+    ('copenhagen', 'kobenhavn'),
+    ('copenhagen', 'koebenhavn'),
+    ('eindhoven', 'psv'),
+    ('alkmaar', 'az'),
+    ('goztepe', 'goeztepe'),
+    ('cologne', 'koln'),
+    ('cologne', 'koeln'),
+    ('soenderjyske', 'sonderjyske'),
+    ('nordsjaelland', 'nordsjaeland'),
+    ('bilbao', 'athletic'),
+    ('cska', 'cska moscow'),
+    ('bodoe', 'bodo'),
+    ('bodoe', 'bodoglimt'),
+    ('bodo', 'bodoe'),
+    ('qarabag', 'qarabag'),
+    ('fenerbahce', 'fenerbahce'),
+    ('besiktas', 'besiktas'),
+    ('galatasaray', 'galatasaray'),
+    ('barcelona', 'barca'),
+    ('atletico', 'atletico madrid'),
+    ('wolves', 'wolverhampton'),
+    ('wolverhampton', 'wolves'),
+    ('nottingham', 'nott forest'),
+    ('tottenham', 'spurs'),
+    ('spurs', 'tottenham'),
+]
+
+def _build_spelling_variants(pairs):
+    d = {}
+    for a, b in pairs:
+        d.setdefault(a, set()).add(b)
+        d.setdefault(b, set()).add(a)
+    return {k: list(v) for k, v in d.items()}
+
+SPELLING_VARIANTS = _build_spelling_variants(_SPELLING_PAIRS)
 
 ABBREVIATIONS = {
     'qpr': 'queens park rangers',
@@ -261,15 +251,10 @@ def align_poly_prices(kalshi_yes_team: str, poly_outcomes: List[str],
     
     return (yes_price, no_price, alignment)
 
-UNICODE_MANUAL_MAP = {
-    'ø': 'o', 'æ': 'ae', 'ð': 'd', 'þ': 'th',
-    'ł': 'l', 'ß': 'ss', 'đ': 'd',
-    'Ø': 'o', 'Æ': 'ae', 'Ð': 'd', 'Þ': 'th',
-    'Ł': 'l', 'Đ': 'd',
-}
+from snapshot import transliterate as _transliterate_m2, UNICODE_MAP as _UNICODE_MAP_M2
 
 def _apply_unicode_map(text: str) -> str:
-    return ''.join(UNICODE_MANUAL_MAP.get(c, c) for c in text)
+    return _transliterate_m2(text)
 
 def clean_token(token: str) -> str:
     """Clean token from punctuation for comparison"""
@@ -619,10 +604,26 @@ class OutcomeMatcherV2:
         print(f"      ✅ MATCHED: {matched.get('event_title', '')[:50]}...")
         return matched
     
+    NON_GAME_PATTERNS = [
+        'NBATEAM', 'ADVANCE', 'FIRSTGOAL', 'ANYTIMEGOAL',
+        'NBAPOINTS', 'NBAREBOUNDS', 'NBAASSISTS', 'NBABLOCKS', 'NBASTEALS',
+        'NBAMVP', 'NBAROTY', 'NBADPOY',
+        'NHLGOALS', 'NHLPOINTS',
+        'MVPNBA', 'MVPNHL',
+        'NBAOVERALLSEED', 'NBAPLAYOFFS',
+        'NHLOVERALLSEED',
+        'WINNER', 'CHAMPION',
+    ]
+
     def _is_props(self, ticker: str, title: str) -> bool:
-        """Check if it's props (skip these!)"""
         text = (ticker + ' ' + title).upper()
-        return any(pattern.upper() in text for pattern in self.props_patterns)
+        if any(pattern.upper() in text for pattern in self.props_patterns):
+            return True
+        ticker_upper = ticker.upper()
+        for pat in self.NON_GAME_PATTERNS:
+            if pat in ticker_upper:
+                return True
+        return False
     
     def _extract_sport_from_ticker(self, ticker: str) -> str:
         """Extract sport from event_ticker prefix"""

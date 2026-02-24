@@ -12,9 +12,22 @@ import json
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2"
 
 
+NON_GAME_TICKER_PATTERNS = [
+    'NBATEAM', 'ADVANCE', 'FIRSTGOAL', 'ANYTIMEGOAL',
+    'NBAPOINTS', 'NBAREBOUNDS', 'NBAASSISTS', 'NBABLOCKS', 'NBASTEALS',
+    'NBAMVP', 'NBAROTY', 'NBADPOY',
+    'NHLGOALS', 'NHLPOINTS',
+    'MVPNBA', 'MVPNHL',
+    'NBAOVERALLSEED', 'NBAPLAYOFFS',
+    'NHLOVERALLSEED',
+    'WINNER', 'CHAMPION',
+]
+
+
 class KalshiListener:
-    def __init__(self, hours_ahead: int = 6):
+    def __init__(self, hours_ahead: int = 6, live_only: bool = False):
         self.hours_ahead = hours_ahead
+        self.live_only = live_only
         self.games: List[Dict] = []
         
     def get_current_time(self) -> datetime:
@@ -132,8 +145,18 @@ class KalshiListener:
             
             is_live = estimated_start <= now < end_time
             is_upcoming = now <= estimated_start <= cutoff_start
-            
-            if is_live or is_upcoming:
+
+            if self.live_only:
+                if not is_live:
+                    continue
+            elif not (is_live or is_upcoming):
+                continue
+
+            ticker_upper = event_ticker.upper()
+            if any(pat in ticker_upper for pat in NON_GAME_TICKER_PATTERNS):
+                continue
+
+            if True:
                 seen_events.add(event_ticker)
                 hours_left = (estimated_start - now).total_seconds() / 3600
                 
@@ -301,20 +324,26 @@ class KalshiListener:
 
 
 def main():
-    listener = KalshiListener(hours_ahead=6)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--live-only', action='store_true')
+    parser.add_argument('--hours', type=int, default=6)
+    args = parser.parse_args()
+
+    listener = KalshiListener(hours_ahead=args.hours, live_only=args.live_only)
     result = listener.run()
-    
+
+    mode_str = 'LIVE ONLY' if args.live_only else f'{args.hours}h window'
     print(f"\n{'='*80}")
-    print(f"KALSHI РЕЗУЛЬТАТ")
+    print(f"KALSHI ({mode_str})")
     print(f"{'='*80}")
-    print(f"Событий на ближайшие 6ч: {result['events_count']}")
-    print(f"Всего рынков: {result['total_markets']}")
-    
+    print(f"Events: {result['events_count']}")
+    print(f"Markets: {result['total_markets']}")
+
     if result['events']:
-        print(f"\n📋 События:")
         for i, g in enumerate(result['events'][:20], 1):
-            print(f"  {i:2}. {g['event_title'][:50]}... | {g['hours_left']:.1f}ч | {g['markets_count']} рынков")
-    
+            print(f"  {i:2}. {g['event_title'][:50]}... | {g['hours_left']:.1f}h | {g['markets_count']} markets")
+
     return result
 
 
