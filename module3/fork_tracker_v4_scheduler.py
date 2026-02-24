@@ -283,7 +283,7 @@ class ForkTrackerV4:
         
         # 1) Единицы: проверка 0..1
         def _is_closed(x): 
-            return x >= 0.98 or x <= 0.02
+            return x >= 0.95 or x <= 0.05
         
         if max(k_yes_ask, k_no_ask, p_yes_ask, p_no_ask) > 1.0001:
             self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="units_not_0_1")
@@ -345,9 +345,9 @@ class ForkTrackerV4:
         edge = max(edge1, edge2)
         fork_pct = edge * 100.0
         
-        # 6) Слишком хорошо (>20% = фантом/не тот market)
-        if edge > 0.20:
-            self._diag_link(link_id, link, k_prices, p_prices, fork_pct=fork_pct, decision="REJECT", reason="fork_gt_20pct")
+        # 6) Слишком хорошо (>15% = фантом/завершённый матч)
+        if edge > 0.15:
+            self._diag_link(link_id, link, k_prices, p_prices, fork_pct=fork_pct, decision="REJECT", reason="fork_gt_15pct_phantom")
             return None
         
         # 7) Несогласованность (после alignment от М2)
