@@ -260,6 +260,17 @@ class ForkTrackerV4:
             self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="fetch_failed")
             return None
         
+        # BUG FIX #1: Проверяем статус рынка Kalshi (closed/settled = фейк)
+        k_status = k_prices.get('status', '')
+        if k_status and k_status.lower() in ('closed', 'settled', 'finalized'):
+            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason=f"kalshi_market_{k_status}")
+            return None
+        
+        # BUG FIX #2: Пустой ордербук Poly = нельзя исполнить
+        if p_prices.get('no_bids') or p_prices.get('no_asks'):
+            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="poly_empty_orderbook")
+            return None
+        
         # Читаем ASK (source of truth!)
         k_yes_ask = k_prices.get("yes_ask", 0)
         k_no_ask  = k_prices.get("no_ask", 0)
@@ -272,10 +283,10 @@ class ForkTrackerV4:
         p_no_ask  = p_prices.get("no_ask", 0) or p_no
         p_yes_bid = p_prices.get("yes_bid", 0) or p_yes
         p_no_bid  = p_prices.get("no_bid", 0) or p_no
-        p_source = p_prices.get("source", "")
+        p_source_field = p_prices.get("source", "")
         
-        # GAMMA FALLBACK → добавляем виртуальный спред +1%
-        if "gamma" in p_source.lower():
+        # BUG FIX #3: Gamma fallback bid=ask (нет реального спреда) → ненадёжные цены
+        if "gamma" in p_source_field.lower():
             p_yes_ask = min(p_yes + 0.01, 0.99)
             p_no_ask = min(p_no + 0.01, 0.99)
             p_yes_bid = max(p_yes - 0.01, 0.01)
