@@ -272,12 +272,15 @@ class M0Orchestrator:
                                 scheduled.next_check_at = now + self.tracker.POSITIVE_INTERVAL
                                 positive_forks.append(result)
                                 
-                                # Логируем
-                                print(f"\n💰 ВИЛКА: {fork_pct:+.2f}% | {result['fixture_title']}")
+                                pp = result.get('poly_prices', {})
+                                depth_str = ''
+                                y_depth = pp.get('yes_ask_depth', 0) + pp.get('no_ask_depth', 0)
+                                if y_depth > 0:
+                                    depth_str = f' | depth=${y_depth:.0f}'
+                                print(f"\n💰 ВИЛКА: {fork_pct:+.2f}% | {result['fixture_title']}{depth_str}")
                             else:  # Минусовая
                                 scheduled.next_check_at = now + self.tracker.NEGATIVE_INTERVAL
                                 
-                                # Логируем отрицательные тоже!
                                 print(f"\n💸 ВИЛКА: {fork_pct:+.2f}% | {result['fixture_title']}")
                         else:
                             scheduled.next_check_at = now + 5.0

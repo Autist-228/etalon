@@ -271,6 +271,20 @@ class ForkTrackerV4:
             self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason="poly_empty_orderbook")
             return None
         
+        # BUG FIX #4: Минимальная ликвидность Poly (top-5 depth < $20 = нельзя исполнить)
+        MIN_DEPTH = 20
+        p_yes_bid_depth = p_prices.get('yes_bid_depth', 0)
+        p_yes_ask_depth = p_prices.get('yes_ask_depth', 0)
+        p_no_bid_depth = p_prices.get('no_bid_depth', 0)
+        p_no_ask_depth = p_prices.get('no_ask_depth', 0)
+        p_min_depth = min(
+            p_yes_ask_depth + p_no_ask_depth,
+            p_yes_bid_depth + p_no_bid_depth
+        ) if (p_yes_ask_depth + p_no_ask_depth + p_yes_bid_depth + p_no_bid_depth) > 0 else -1
+        if p_min_depth >= 0 and p_min_depth < MIN_DEPTH:
+            self._diag_link(link_id, link, k_prices, p_prices, decision="REJECT", reason=f"poly_low_liquidity_${p_min_depth:.0f}")
+            return None
+        
         # Читаем ASK (source of truth!)
         k_yes_ask = k_prices.get("yes_ask", 0)
         k_no_ask  = k_prices.get("no_ask", 0)

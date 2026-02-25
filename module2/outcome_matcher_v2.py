@@ -1337,6 +1337,8 @@ JSON:"""
             yes_idx = outcomes.index('Yes') if 'Yes' in outcomes else 0
             md['_yes_price'] = float(prices_raw[yes_idx]) if prices_raw else 0.5
         
+        used_poly_cids = set()
+        
         for k_market in k_markets:
             k_market_ticker = k_market.get('market_ticker', '')
             k_yes_sub = k_market.get('yes_sub_title', '').strip()
@@ -1352,6 +1354,9 @@ JSON:"""
             
             for md in binary_markets:
                 if md.get('_is_draw', False):
+                    continue
+                cid = md.get('condition_id', '')
+                if cid in used_poly_cids:
                     continue
                 q_team = md.get('_question_team', '')
                 if not q_team:
@@ -1373,6 +1378,9 @@ JSON:"""
                 for md in binary_markets:
                     if md.get('_is_draw', False):
                         continue
+                    cid = md.get('condition_id', '')
+                    if cid in used_poly_cids:
+                        continue
                     diff = abs(md['_yes_price'] - k_yes_price)
                     if diff < best_diff:
                         best_diff = diff
@@ -1391,6 +1399,8 @@ JSON:"""
             
             p_yes_price = m_prices[yes_idx]
             p_no_price = m_prices[no_idx]
+            
+            used_poly_cids.add(m_condition_id)
             
             self.stats['alignment_direct'] = self.stats.get('alignment_direct', 0) + 1
             

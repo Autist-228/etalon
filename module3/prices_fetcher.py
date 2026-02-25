@@ -297,6 +297,11 @@ class PricesFetcher:
             yes_mid = yes_prices.get('mid', 0.5) if yes_prices else 0.5
             no_mid = no_prices.get('mid', 0.5) if no_prices else 0.5
             
+            yes_bid_depth = yes_prices.get('bid_depth', 0) if yes_prices else 0
+            yes_ask_depth = yes_prices.get('ask_depth', 0) if yes_prices else 0
+            no_bid_depth = no_prices.get('bid_depth', 0) if no_prices else 0
+            no_ask_depth = no_prices.get('ask_depth', 0) if no_prices else 0
+            
             result = {
                 'yes_bid': yes_bid,
                 'yes_ask': yes_ask,
@@ -304,10 +309,14 @@ class PricesFetcher:
                 'no_ask': no_ask,
                 'yes_price': yes_mid,
                 'no_price': no_mid,
-                'yes': yes_mid,  # ← КЛЮЧ ДЛЯ СОВМЕСТИМОСТИ (mid = (bid+ask)/2)!
-                'no': no_mid,    # ← КЛЮЧ ДЛЯ СОВМЕСТИМОСТИ!
+                'yes': yes_mid,
+                'no': no_mid,
                 'source': 'clob',
                 'condition_id_verified': True,
+                'yes_bid_depth': yes_bid_depth,
+                'yes_ask_depth': yes_ask_depth,
+                'no_bid_depth': no_bid_depth,
+                'no_ask_depth': no_ask_depth,
             }
             
             self._set_cached(cache_key, result)
@@ -345,18 +354,24 @@ class PricesFetcher:
                     
                     best_bid = max((float(b['price']) for b in bids), default=None)
                     best_ask = min((float(a['price']) for a in asks), default=None)
+                    bid_depth = sum(float(b.get('size', 0)) for b in bids[:5])
+                    ask_depth = sum(float(a.get('size', 0)) for a in asks[:5])
                     
                     if best_bid is not None and best_ask is not None:
                         return {
                             'bid': best_bid,
                             'ask': best_ask,
                             'mid': mid,
+                            'bid_depth': bid_depth,
+                            'ask_depth': ask_depth,
                         }
                     elif best_bid is not None:
                         return {
                             'bid': best_bid,
                             'ask': best_bid,
                             'mid': mid,
+                            'bid_depth': bid_depth,
+                            'ask_depth': 0,
                             'no_asks': True,
                         }
                     elif best_ask is not None:
@@ -364,6 +379,8 @@ class PricesFetcher:
                             'bid': best_ask,
                             'ask': best_ask,
                             'mid': mid,
+                            'bid_depth': 0,
+                            'ask_depth': ask_depth,
                             'no_bids': True,
                         }
                 
