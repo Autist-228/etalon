@@ -560,6 +560,10 @@ class OutcomeMatcherV2:
                        if self._extract_sub_event_number(c.get('event_title', '')) is None]
             if non_sub:
                 candidates = non_sub
+            else:
+                self.stats['skipped_no_candidates'] += 1
+                print(f"      ❌ All Poly candidates are sub-events but Kalshi is main event")
+                return None
         
         if not candidates:
             self.stats['skipped_no_candidates'] += 1
@@ -1380,20 +1384,8 @@ JSON:"""
                     best_market = md
             
             if best_market is None:
-                best_diff = float('inf')
-                for md in binary_markets:
-                    if md.get('_is_draw', False):
-                        continue
-                    cid = md.get('condition_id', '')
-                    if cid in used_poly_cids:
-                        continue
-                    diff = abs(md['_yes_price'] - k_yes_price)
-                    if diff < best_diff:
-                        best_diff = diff
-                        best_market = md
-                if best_market is None or best_diff > 0.15:
-                    self.stats['skipped_alignment_unknown'] = self.stats.get('skipped_alignment_unknown', 0) + 1
-                    continue
+                self.stats['skipped_alignment_unknown'] = self.stats.get('skipped_alignment_unknown', 0) + 1
+                continue
             
             m_outcomes = best_market.get('outcomes', [])
             m_prices_raw = best_market.get('prices', [])
@@ -1454,25 +1446,50 @@ JSON:"""
         return links
     
     _EXOTIC_PATTERNS = re.compile(
-        r'\b(spread|handicap|total\s*(points|goals|runs|sets|maps|games)?'
+        r'\b(spread|handicap|total\s*(points|goals|runs|sets|maps|games|rounds|kills)?'
         r'|over.?under|o/u'
         r'|btts|both\s*teams?\s*to\s*score'
         r'|correct\s*score|exact\s*score'
         r'|margin\s*of\s*victory'
-        r'|first\s*(goal|blood|kill|baron|dragon|tower)'
+        r'|first\s*(goal|blood|kill|baron|dragon|tower|touchdown|basket)'
         r'|anytime\s*(goal)?\s*scorer'
         r'|1st\s*(half|quarter|period|set|map|inning)'
         r'|2nd\s*(half|quarter|period|set|map|inning)'
         r'|3rd\s*(quarter|period|set|map|inning)'
         r'|4th\s*(quarter|period|inning)'
         r'|half\s*time'
-        r'|most\s*(kills|points|goals|assists|rebounds)'
+        r'|most\s*(kills|points|goals|assists|rebounds|hits|runs|strikeouts)'
         r'|player\s*props?'
-        r'|mvp|rookie)\b'
-        r'|-\s*(map|game|set)\s*\d+\s*win'
+        r'|mvp|rookie'
+        r'|double\s*chance'
+        r'|draw\s*no\s*bet'
+        r'|clean\s*sheet'
+        r'|over\s*time|extra\s*time'
+        r'|method\s*of\s*(victory|win)'
+        r'|go\s*(the\s*)?distance'
+        r'|total\s*rounds'
+        r'|pistol\s*round'
+        r'|to\s*(qualify|advance)'
+        r'|(yellow|red)\s*cards?'
+        r'|penalty\s*shootout'
+        r'|number\s*of\s*(games|maps|sets|rounds)'
+        r'|race\s*to\s*\d+'
+        r'|series\s*(correct\s*)?score'
+        r'|how\s*many'
+        r'|top\s*(batsman|bowler|scorer|run)'
+        r'|man\s*of\s*the\s*match'
+        r'|will\s*there\s*be\s*(overtime|extra\s*time|a\s*draw|a\s*tie)'
+        r'|exact\s*(number|total)'
+        r'|under\s+\d+\.?\d*\s'
+        r'|over\s+\d+\.?\d*\s'
+        r')\b'
+        r'|-\s*(map|game|set|round|period|leg)\s*\d+\s*win'
         r'|map\s*\d+\s*winner'
         r'|game\s*\d+\s*winner'
-        r'|set\s*\d+\s*winner',
+        r'|set\s*\d+\s*winner'
+        r'|round\s*\d+\s*winner'
+        r'|period\s*\d+\s*winner'
+        r'|leg\s*\d+\s*winner',
         re.IGNORECASE
     )
 
@@ -1483,9 +1500,19 @@ JSON:"""
             return True
         outcomes = md.get('outcomes', [])
         for o in outcomes:
-            if re.search(r'\b(covers?|doesn.t cover)\b', str(o), re.I):
+            o_str = str(o)
+            if re.search(r'\b(covers?|doesn.t cover)\b', o_str, re.I):
                 self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
                 return True
+            if re.search(r'\d+\.5', o_str):
+                self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
+                return True
+            if re.search(r'\b\d+\s*-\s*\d+\b', o_str) and not re.search(r'(bo|best of)\s*\d', o_str, re.I):
+                self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
+                return True
+        if sorted(outcomes) in [['Over', 'Under'], ['Under', 'Over']]:
+            self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
+            return True
         return False
 
     def _print_stats(self):
