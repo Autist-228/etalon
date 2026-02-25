@@ -1468,7 +1468,11 @@ JSON:"""
         r'|half\s*time'
         r'|most\s*(kills|points|goals|assists|rebounds)'
         r'|player\s*props?'
-        r'|mvp|rookie)\b',
+        r'|mvp|rookie)\b'
+        r'|-\s*(map|game|set)\s*\d+\s*win'
+        r'|map\s*\d+\s*winner'
+        r'|game\s*\d+\s*winner'
+        r'|set\s*\d+\s*winner',
         re.IGNORECASE
     )
 
