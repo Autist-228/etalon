@@ -613,6 +613,9 @@ class OutcomeMatcherV2:
         'NBAOVERALLSEED', 'NBAPLAYOFFS',
         'NHLOVERALLSEED',
         'WINNER', 'CHAMPION',
+        'SPREAD', 'TOTAL', 'BTTS', 'MARGIN',
+        'HALFTIME', '1STHALF', '2NDHALF',
+        'CORRECTSCORE', 'FIRSTGOALSCORER',
     ]
 
     def _is_props(self, ticker: str, title: str) -> bool:
@@ -1152,6 +1155,8 @@ JSON:"""
         
         valid_markets = [md for md in p_markets_detailed if md.get('valid')]
         
+        valid_markets = [md for md in valid_markets if not self._is_exotic_market(md)]
+        
         all_binary = (
             len(valid_markets) >= 2
             and all(
@@ -1317,6 +1322,7 @@ JSON:"""
         binary_markets = [
             md for md in valid_markets
             if sorted(md.get('outcomes', [])) == ['No', 'Yes']
+            and not self._is_exotic_market(md)
         ]
         
         if len(binary_markets) < 2:
@@ -1447,6 +1453,37 @@ JSON:"""
         
         return links
     
+    _EXOTIC_PATTERNS = re.compile(
+        r'\b(spread|handicap|total\s*(points|goals|runs|sets|maps|games)?'
+        r'|over.?under|o/u'
+        r'|btts|both\s*teams?\s*to\s*score'
+        r'|correct\s*score|exact\s*score'
+        r'|margin\s*of\s*victory'
+        r'|first\s*(goal|blood|kill|baron|dragon|tower)'
+        r'|anytime\s*(goal)?\s*scorer'
+        r'|1st\s*(half|quarter|period|set|map|inning)'
+        r'|2nd\s*(half|quarter|period|set|map|inning)'
+        r'|3rd\s*(quarter|period|set|map|inning)'
+        r'|4th\s*(quarter|period|inning)'
+        r'|half\s*time'
+        r'|most\s*(kills|points|goals|assists|rebounds)'
+        r'|player\s*props?'
+        r'|mvp|rookie)\b',
+        re.IGNORECASE
+    )
+
+    def _is_exotic_market(self, md: Dict) -> bool:
+        question = md.get('question', '')
+        if self._EXOTIC_PATTERNS.search(question):
+            self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
+            return True
+        outcomes = md.get('outcomes', [])
+        for o in outcomes:
+            if re.search(r'\b(covers?|doesn.t cover)\b', str(o), re.I):
+                self.stats['skipped_exotic_market'] = self.stats.get('skipped_exotic_market', 0) + 1
+                return True
+        return False
+
     def _print_stats(self):
         """Print statistics"""
         # Calculate totals
@@ -1476,6 +1513,7 @@ JSON:"""
         print(f"   Claude NONE:     {self.stats['skipped_claude_none']}")
         print(f"   Post-check:      {self.stats['skipped_postcheck']}")
         print(f"   Alignment UNKNOWN: {self.stats.get('skipped_alignment_unknown', 0)}")
+        print(f"   Exotic markets:  {self.stats.get('skipped_exotic_market', 0)}")
         print()
         print(f"🤖 CLAUDE API:")
         print(f"   Calls: {self.stats['claude_calls']}")
